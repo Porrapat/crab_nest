@@ -230,7 +230,13 @@
             const isOwn = data.sender_name === username;
             messageDiv.className = `message ${isOwn ? 'message-own' : ''}`;
             
-            const time = data.created_at ? new Date(data.created_at).toLocaleTimeString() : new Date().toLocaleTimeString();
+            const date = data.created_at ? new Date(data.created_at) : new Date();
+            const time = date.getUTCFullYear() + '-' + 
+                String(date.getUTCMonth() + 1).padStart(2, '0') + '-' + 
+                String(date.getUTCDate()).padStart(2, '0') + ' ' + 
+                String(date.getUTCHours()).padStart(2, '0') + ':' + 
+                String(date.getUTCMinutes()).padStart(2, '0') + ':' + 
+                String(date.getUTCSeconds()).padStart(2, '0');
             
             messageDiv.innerHTML = `
                 <div class="message-sender">${escapeHtml(data.sender_name)}</div>
