@@ -27,13 +27,6 @@ pub struct ChatMessage {
     pub created_at: String,
 }
 
-/// New message request
-#[derive(Debug, Deserialize)]
-pub struct NewMessage {
-    pub sender_name: String,
-    pub content: String,
-}
-
 /// Run database migrations
 pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     sqlx::query(
