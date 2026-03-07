@@ -42,12 +42,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Pages
         .route("/", get(handlers::index_page))
         .route("/create", get(handlers::create_room_page))
-        .route("/room/:room_key", get(handlers::room_page))
+        .route("/room/{room_key}", get(handlers::room_page))
         // API
         .route("/api/rooms", post(handlers::create_room))
-        .route("/api/rooms/:room_key/messages", get(handlers::get_messages))
+        .route("/api/rooms/{room_key}/messages", get(handlers::get_messages))
         // WebSocket
-        .route("/ws/:room_key", get(handlers::websocket_handler))
+        .route("/ws/{room_key}", get(handlers::websocket_handler))
         // Static files
         .nest_service("/static", ServeDir::new("static"))
         .with_state(state);
