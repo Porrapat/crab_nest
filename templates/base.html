@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,7 +9,8 @@
     <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
     <style>
-        :root {
+        /* Dark Theme (Default) */
+        :root, [data-theme="dark"] {
             --rust-primary: #CE412B;
             --rust-secondary: #F9A825;
             --rust-dark: #1C1C1C;
@@ -17,19 +18,68 @@
             --rust-light: #F5F5F5;
             --rust-gray: #2D2D2D;
             --rust-orange: #F97316;
+            
+            /* Theme-specific variables */
+            --bg-gradient-start: #0D0D0D;
+            --bg-gradient-end: #1C1C1C;
+            --text-primary: #F5F5F5;
+            --text-secondary: #B0B0B0;
+            --text-muted: #CCCCCC;
+            --navbar-bg: rgba(28, 28, 28, 0.95);
+            --card-bg: rgba(45, 45, 45, 0.8);
+            --card-border: rgba(206, 65, 43, 0.3);
+            --footer-bg: rgba(13, 13, 13, 0.9);
+            --input-bg: rgba(45, 45, 45, 0.8);
+            --chat-bg: rgba(13, 13, 13, 0.5);
+            --message-bg: rgba(45, 45, 45, 0.8);
+            --message-own-bg: rgba(206, 65, 43, 0.3);
+            --scrollbar-track: rgba(45, 45, 45, 0.3);
+            --room-key-bg: rgba(206, 65, 43, 0.2);
+            --nav-link-color: rgba(255, 255, 255, 0.85);
+        }
+        
+        /* Light Theme */
+        [data-theme="light"] {
+            --rust-primary: #CE412B;
+            --rust-secondary: #F9A825;
+            --rust-dark: #1C1C1C;
+            --rust-darker: #0D0D0D;
+            --rust-light: #F5F5F5;
+            --rust-gray: #2D2D2D;
+            --rust-orange: #E05E0F;
+            
+            /* Theme-specific variables */
+            --bg-gradient-start: #FFFFFF;
+            --bg-gradient-end: #F0F0F0;
+            --text-primary: #1C1C1C;
+            --text-secondary: #555555;
+            --text-muted: #666666;
+            --navbar-bg: rgba(255, 255, 255, 0.95);
+            --card-bg: rgba(255, 255, 255, 0.9);
+            --card-border: rgba(206, 65, 43, 0.4);
+            --footer-bg: rgba(245, 245, 245, 0.95);
+            --input-bg: rgba(255, 255, 255, 0.9);
+            --chat-bg: rgba(245, 245, 245, 0.8);
+            --message-bg: rgba(240, 240, 240, 0.9);
+            --message-own-bg: rgba(206, 65, 43, 0.15);
+            --scrollbar-track: rgba(200, 200, 200, 0.5);
+            --room-key-bg: rgba(206, 65, 43, 0.1);
+            --nav-link-color: #333333;
         }
         
         body {
-            background: linear-gradient(135deg, var(--rust-darker) 0%, var(--rust-dark) 100%);
-            color: var(--rust-light);
+            background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+            color: var(--text-primary);
             min-height: 100vh;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            transition: background 0.3s ease, color 0.3s ease;
         }
         
         .navbar {
-            background: rgba(28, 28, 28, 0.95) !important;
+            background: var(--navbar-bg) !important;
             backdrop-filter: blur(10px);
             border-bottom: 2px solid var(--rust-primary);
+            transition: background 0.3s ease;
         }
         
         .navbar-brand {
@@ -43,6 +93,15 @@
         
         .brand-crab {
             color: var(--rust-orange) !important;
+        }
+        
+        .nav-link {
+            color: var(--nav-link-color) !important;
+            transition: color 0.3s ease;
+        }
+        
+        .nav-link:hover {
+            color: var(--rust-primary) !important;
         }
         
         .btn-rust {
@@ -78,10 +137,11 @@
         }
         
         .card-rust {
-            background: rgba(45, 45, 45, 0.8);
-            border: 1px solid rgba(206, 65, 43, 0.3);
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
             border-radius: 16px;
             backdrop-filter: blur(10px);
+            transition: background 0.3s ease, border-color 0.3s ease;
         }
         
         .hero-section {
@@ -93,11 +153,12 @@
             font-size: 4rem;
             font-weight: 800;
             margin-bottom: 1rem;
+            color: var(--text-primary);
         }
         
         .hero-subtitle {
             font-size: 1.3rem;
-            color: #B0B0B0;
+            color: var(--text-secondary);
             margin-bottom: 2rem;
         }
         
@@ -113,32 +174,65 @@
         }
         
         .footer {
-            background: rgba(13, 13, 13, 0.9);
-            border-top: 1px solid rgba(206, 65, 43, 0.3);
+            background: var(--footer-bg);
+            border-top: 1px solid var(--card-border);
             padding: 20px 0;
             margin-top: auto;
+            transition: background 0.3s ease;
         }
         
         .glow-text {
             text-shadow: 0 0 20px rgba(206, 65, 43, 0.5);
         }
         
-        /* Override Bootstrap text-muted for dark theme */
+        /* Override Bootstrap text-muted */
         .text-muted {
-            color: #CCCCCC !important;
+            color: var(--text-muted) !important;
         }
         
         .card-rust .text-muted {
-            color: #BBBBBB !important;
+            color: var(--text-secondary) !important;
         }
         
-        /* Card titles should be white */
+        /* Card titles */
         .card-rust h4 {
-            color: #FFFFFF !important;
+            color: var(--text-primary) !important;
         }
         
         .card-rust h5 {
-            color: #FFFFFF !important;
+            color: var(--text-primary) !important;
+        }
+        
+        /* Theme toggle button */
+        .theme-toggle {
+            background: transparent;
+            border: 2px solid var(--rust-primary);
+            color: var(--rust-primary);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1.1rem;
+        }
+        
+        .theme-toggle:hover {
+            background: var(--rust-primary);
+            color: white;
+            transform: rotate(15deg);
+        }
+        
+        [data-theme="light"] .theme-toggle .bi-moon-fill,
+        [data-theme="dark"] .theme-toggle .bi-sun-fill {
+            display: none;
+        }
+        
+        [data-theme="light"] .theme-toggle .bi-sun-fill,
+        [data-theme="dark"] .theme-toggle .bi-moon-fill {
+            display: inline;
         }
         
         /* Chat specific styles */
@@ -152,9 +246,10 @@
             flex: 1;
             overflow-y: auto;
             padding: 20px;
-            background: rgba(13, 13, 13, 0.5);
+            background: var(--chat-bg);
             border-radius: 12px;
             margin-bottom: 15px;
+            transition: background 0.3s ease;
         }
         
         .message {
@@ -174,22 +269,24 @@
         }
         
         .message-content {
-            background: rgba(45, 45, 45, 0.8);
+            background: var(--message-bg);
             padding: 10px 15px;
             border-radius: 12px;
             display: inline-block;
             max-width: 80%;
             word-wrap: break-word;
+            color: var(--text-primary);
+            transition: background 0.3s ease;
         }
         
         .message-time {
             font-size: 0.75rem;
-            color: #888;
+            color: var(--text-secondary);
             margin-top: 4px;
         }
         
         .message-own .message-content {
-            background: rgba(206, 65, 43, 0.3);
+            background: var(--message-own-bg);
             margin-left: auto;
         }
         
@@ -203,7 +300,7 @@
         
         .message-system {
             text-align: center;
-            color: #888;
+            color: var(--text-secondary);
             font-style: italic;
             font-size: 0.9rem;
         }
@@ -215,11 +312,12 @@
         
         .chat-input {
             flex: 1;
-            background: rgba(45, 45, 45, 0.8);
-            border: 1px solid rgba(206, 65, 43, 0.3);
-            color: white;
+            background: var(--input-bg);
+            border: 1px solid var(--card-border);
+            color: var(--text-primary);
             border-radius: 12px;
             padding: 12px 20px;
+            transition: background 0.3s ease, border-color 0.3s ease;
         }
         
         .chat-input:focus {
@@ -228,13 +326,18 @@
             box-shadow: 0 0 10px rgba(206, 65, 43, 0.3);
         }
         
+        .chat-input::placeholder {
+            color: var(--text-secondary);
+        }
+        
         .username-input {
-            background: rgba(45, 45, 45, 0.8);
-            border: 1px solid rgba(206, 65, 43, 0.3);
-            color: white;
+            background: var(--input-bg);
+            border: 1px solid var(--card-border);
+            color: var(--text-primary);
             border-radius: 8px;
             padding: 8px 15px;
             width: 200px;
+            transition: background 0.3s ease, border-color 0.3s ease;
         }
         
         .username-input:focus {
@@ -243,15 +346,16 @@
         }
         
         .room-info {
-            background: rgba(45, 45, 45, 0.6);
+            background: var(--card-bg);
             border-radius: 12px;
             padding: 15px 20px;
             margin-bottom: 20px;
+            transition: background 0.3s ease;
         }
         
         .room-key {
             font-family: 'Courier New', monospace;
-            background: rgba(206, 65, 43, 0.2);
+            background: var(--room-key-bg);
             padding: 5px 15px;
             border-radius: 6px;
             color: var(--rust-orange);
@@ -278,7 +382,7 @@
         }
         
         ::-webkit-scrollbar-track {
-            background: rgba(45, 45, 45, 0.3);
+            background: var(--scrollbar-track);
             border-radius: 4px;
         }
         
@@ -289,6 +393,22 @@
         
         ::-webkit-scrollbar-thumb:hover {
             background: #E04E37;
+        }
+        
+        /* Form controls in light theme */
+        [data-theme="light"] .form-control,
+        [data-theme="light"] .form-select {
+            background-color: var(--input-bg);
+            border-color: var(--card-border);
+            color: var(--text-primary);
+        }
+        
+        [data-theme="light"] .form-control:focus,
+        [data-theme="light"] .form-select:focus {
+            background-color: var(--input-bg);
+            border-color: var(--rust-primary);
+            color: var(--text-primary);
+            box-shadow: 0 0 0 0.25rem rgba(206, 65, 43, 0.25);
         }
     </style>
     {% block extra_css %}{% endblock %}
@@ -305,12 +425,18 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
+                <ul class="navbar-nav ms-auto align-items-center">
                     <li class="nav-item">
                         <a class="nav-link" href="/"><i class="bi bi-house-door me-1"></i>Home</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="/create"><i class="bi bi-plus-circle me-1"></i>Create Room</a>
+                    </li>
+                    <li class="nav-item ms-2">
+                        <button class="theme-toggle" id="themeToggle" title="Toggle theme">
+                            <i class="bi bi-moon-fill"></i>
+                            <i class="bi bi-sun-fill"></i>
+                        </button>
                     </li>
                 </ul>
             </div>
@@ -331,6 +457,31 @@
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Theme Toggle Script -->
+    <script>
+        (function() {
+            // Get saved theme from localStorage or default to 'dark'
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            
+            // Theme toggle functionality
+            document.addEventListener('DOMContentLoaded', function() {
+                const themeToggle = document.getElementById('themeToggle');
+                
+                if (themeToggle) {
+                    themeToggle.addEventListener('click', function() {
+                        const currentTheme = document.documentElement.getAttribute('data-theme');
+                        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                        
+                        document.documentElement.setAttribute('data-theme', newTheme);
+                        localStorage.setItem('theme', newTheme);
+                    });
+                }
+            });
+        })();
+    </script>
+    
     {% block scripts %}{% endblock %}
 </body>
 </html>
