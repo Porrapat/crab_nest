@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}Home - CrabNest{% endblock %}
+
+{% block content %}
+<main>
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <div class="container">
+            <div class="crab-logo">🦀</div>
+            <h1 class="hero-title">
+                <span class="brand-rust glow-text">Crab</span><span class="brand-crab">Nest</span>
+            </h1>
+            <p class="hero-subtitle">
+                Real-time chat rooms powered by Rust &amp; WebSocket<br>
+                Create a room, share the link, start chatting instantly!
+            </p>
+            <a href="/create" class="btn btn-rust btn-lg me-3">
+                <i class="bi bi-plus-circle me-2"></i>Create Room
+            </a>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="card card-rust h-100 p-4 text-center">
+                        <div class="feature-icon">
+                            <i class="bi bi-lightning-charge-fill"></i>
+                        </div>
+                        <h4>Real-time Chat</h4>
+                        <p class="text-muted">
+                            Instant messaging powered by WebSocket technology. 
+                            Messages appear instantly for all participants.
+                        </p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card card-rust h-100 p-4 text-center">
+                        <div class="feature-icon">
+                            <i class="bi bi-database-fill"></i>
+                        </div>
+                        <h4>Persistent History</h4>
+                        <p class="text-muted">
+                            All messages are stored permanently. 
+                            Come back anytime and see the full conversation history.
+                        </p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card card-rust h-100 p-4 text-center">
+                        <div class="feature-icon">
+                            <i class="bi bi-infinity"></i>
+                        </div>
+                        <h4>Unlimited Rooms</h4>
+                        <p class="text-muted">
+                            Create as many rooms as you want. 
+                            Each room has a unique link you can share.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="py-5">
+        <div class="container">
+            <h2 class="text-center mb-5">
+                <span class="brand-rust">How It Works</span>
+            </h2>
+            <div class="row g-4 justify-content-center">
+                <div class="col-md-3 text-center">
+                    <div class="rounded-circle bg-dark d-inline-flex align-items-center justify-content-center mb-3" 
+                         style="width: 80px; height: 80px; border: 2px solid var(--rust-primary);">
+                        <span class="h3 mb-0 brand-rust">1</span>
+                    </div>
+                    <h5>Create Room</h5>
+                    <p class="text-muted">Click "Create Room" to generate a unique chat room</p>
+                </div>
+                <div class="col-md-3 text-center">
+                    <div class="rounded-circle bg-dark d-inline-flex align-items-center justify-content-center mb-3" 
+                         style="width: 80px; height: 80px; border: 2px solid var(--rust-primary);">
+                        <span class="h3 mb-0 brand-rust">2</span>
+                    </div>
+                    <h5>Share Link</h5>
+                    <p class="text-muted">Copy and share the room link with friends</p>
+                </div>
+                <div class="col-md-3 text-center">
+                    <div class="rounded-circle bg-dark d-inline-flex align-items-center justify-content-center mb-3" 
+                         style="width: 80px; height: 80px; border: 2px solid var(--rust-primary);">
+                        <span class="h3 mb-0 brand-rust">3</span>
+                    </div>
+                    <h5>Start Chatting</h5>
+                    <p class="text-muted">Everyone with the link can join and chat instantly</p>
+                </div>
+            </div>
+        </div>
+    </section>
+</main>
+{% endblock %}

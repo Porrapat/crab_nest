@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Create Room - CrabNest{% endblock %}
+
+{% block content %}
+<main class="py-5">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card card-rust p-5 text-center">
+                    <div class="crab-logo mb-3" style="font-size: 4rem;">🦀</div>
+                    <h2 class="mb-4">Create New Room</h2>
+                    
+                    <div id="create-form">
+                        <div class="mb-4">
+                            <label class="form-label text-muted">Room Name (Optional)</label>
+                            <input type="text" class="form-control chat-input" id="room-name" 
+                                   placeholder="My Awesome Room">
+                        </div>
+                        <button class="btn btn-rust btn-lg w-100" id="create-btn" onclick="createRoom()">
+                            <i class="bi bi-plus-circle me-2"></i>Generate Room
+                        </button>
+                    </div>
+                    
+                    <div id="room-created" style="display: none;">
+                        <div class="alert alert-success bg-success bg-opacity-10 border-success">
+                            <i class="bi bi-check-circle me-2"></i>Room Created Successfully!
+                        </div>
+                        <div class="room-info mb-3">
+                            <p class="mb-2">Your Room Key:</p>
+                            <div class="room-key h4" id="room-key-display"></div>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label text-muted">Share this link:</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control chat-input" id="room-link" readonly>
+                                <button class="btn btn-rust" onclick="copyLink()">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <a href="#" id="enter-room-btn" class="btn btn-rust btn-lg w-100">
+                            <i class="bi bi-door-open me-2"></i>Enter Room
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function createRoom() {
+        const roomName = document.getElementById('room-name').value;
+        const btn = document.getElementById('create-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Creating...';
+        
+        try {
+            const response = await fetch('/api/rooms', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ room_name: roomName || null })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                document.getElementById('room-key-display').textContent = data.room_key;
+                const roomUrl = window.location.origin + data.room_url;
+                document.getElementById('room-link').value = roomUrl;
+                document.getElementById('enter-room-btn').href = data.room_url;
+                
+                document.getElementById('create-form').style.display = 'none';
+                document.getElementById('room-created').style.display = 'block';
+            } else {
+                alert('Failed to create room. Please try again.');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-plus-circle me-2"></i>Generate Room';
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-plus-circle me-2"></i>Generate Room';
+        }
+    }
+    
+    function copyLink() {
+        const linkInput = document.getElementById('room-link');
+        linkInput.select();
+        document.execCommand('copy');
+        
+        // Show feedback
+        const btn = event.target.closest('button');
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check"></i>';
+        setTimeout(() => { btn.innerHTML = originalHtml; }, 1500);
+    }
+</script>
+{% endblock %}

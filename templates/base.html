@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CrabNest{% endblock %}</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --rust-primary: #CE412B;
+            --rust-secondary: #F9A825;
+            --rust-dark: #1C1C1C;
+            --rust-darker: #0D0D0D;
+            --rust-light: #F5F5F5;
+            --rust-gray: #2D2D2D;
+            --rust-orange: #F97316;
+        }
+        
+        body {
+            background: linear-gradient(135deg, var(--rust-darker) 0%, var(--rust-dark) 100%);
+            color: var(--rust-light);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .navbar {
+            background: rgba(28, 28, 28, 0.95) !important;
+            backdrop-filter: blur(10px);
+            border-bottom: 2px solid var(--rust-primary);
+        }
+        
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.5rem;
+        }
+        
+        .brand-rust {
+            color: var(--rust-primary) !important;
+        }
+        
+        .brand-crab {
+            color: var(--rust-orange) !important;
+        }
+        
+        .btn-rust {
+            background: linear-gradient(135deg, var(--rust-primary) 0%, #B83A27 100%);
+            border: none;
+            color: white;
+            font-weight: 600;
+            padding: 12px 30px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-rust:hover {
+            background: linear-gradient(135deg, #E04E37 0%, var(--rust-primary) 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(206, 65, 43, 0.4);
+            color: white;
+        }
+        
+        .btn-rust-outline {
+            background: transparent;
+            border: 2px solid var(--rust-primary);
+            color: var(--rust-primary);
+            font-weight: 600;
+            padding: 10px 28px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-rust-outline:hover {
+            background: var(--rust-primary);
+            color: white;
+        }
+        
+        .card-rust {
+            background: rgba(45, 45, 45, 0.8);
+            border: 1px solid rgba(206, 65, 43, 0.3);
+            border-radius: 16px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .hero-section {
+            padding: 100px 0;
+            text-align: center;
+        }
+        
+        .hero-title {
+            font-size: 4rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+        }
+        
+        .hero-subtitle {
+            font-size: 1.3rem;
+            color: #B0B0B0;
+            margin-bottom: 2rem;
+        }
+        
+        .feature-icon {
+            font-size: 3rem;
+            color: var(--rust-primary);
+            margin-bottom: 1rem;
+        }
+        
+        .crab-logo {
+            font-size: 5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .footer {
+            background: rgba(13, 13, 13, 0.9);
+            border-top: 1px solid rgba(206, 65, 43, 0.3);
+            padding: 20px 0;
+            margin-top: auto;
+        }
+        
+        .glow-text {
+            text-shadow: 0 0 20px rgba(206, 65, 43, 0.5);
+        }
+        
+        /* Chat specific styles */
+        .chat-container {
+            height: calc(100vh - 250px);
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: rgba(13, 13, 13, 0.5);
+            border-radius: 12px;
+            margin-bottom: 15px;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .message-sender {
+            font-weight: 600;
+            color: var(--rust-orange);
+            margin-bottom: 4px;
+        }
+        
+        .message-content {
+            background: rgba(45, 45, 45, 0.8);
+            padding: 10px 15px;
+            border-radius: 12px;
+            display: inline-block;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+        
+        .message-time {
+            font-size: 0.75rem;
+            color: #888;
+            margin-top: 4px;
+        }
+        
+        .message-own .message-content {
+            background: rgba(206, 65, 43, 0.3);
+            margin-left: auto;
+        }
+        
+        .message-own {
+            text-align: right;
+        }
+        
+        .message-own .message-sender {
+            color: var(--rust-primary);
+        }
+        
+        .message-system {
+            text-align: center;
+            color: #888;
+            font-style: italic;
+            font-size: 0.9rem;
+        }
+        
+        .chat-input-container {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .chat-input {
+            flex: 1;
+            background: rgba(45, 45, 45, 0.8);
+            border: 1px solid rgba(206, 65, 43, 0.3);
+            color: white;
+            border-radius: 12px;
+            padding: 12px 20px;
+        }
+        
+        .chat-input:focus {
+            outline: none;
+            border-color: var(--rust-primary);
+            box-shadow: 0 0 10px rgba(206, 65, 43, 0.3);
+        }
+        
+        .username-input {
+            background: rgba(45, 45, 45, 0.8);
+            border: 1px solid rgba(206, 65, 43, 0.3);
+            color: white;
+            border-radius: 8px;
+            padding: 8px 15px;
+            width: 200px;
+        }
+        
+        .username-input:focus {
+            outline: none;
+            border-color: var(--rust-orange);
+        }
+        
+        .room-info {
+            background: rgba(45, 45, 45, 0.6);
+            border-radius: 12px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+        }
+        
+        .room-key {
+            font-family: 'Courier New', monospace;
+            background: rgba(206, 65, 43, 0.2);
+            padding: 5px 15px;
+            border-radius: 6px;
+            color: var(--rust-orange);
+        }
+        
+        .online-indicator {
+            width: 10px;
+            height: 10px;
+            background: #22C55E;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(45, 45, 45, 0.3);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--rust-primary);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #E04E37;
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <span class="brand-crab">🦀</span>
+                <span class="brand-rust">Crab</span><span class="brand-crab">Nest</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/"><i class="bi bi-house-door me-1"></i>Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/create"><i class="bi bi-plus-circle me-1"></i>Create Room</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    {% block content %}{% endblock %}
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container text-center">
+            <span class="text-muted">
+                🦀 CrabNest - Built with <span class="brand-rust">Rust</span> & <span class="text-info">Axum</span>
+            </span>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

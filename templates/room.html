@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block title %}Room {{ room_key }} - CrabNest{% endblock %}
+
+{% block content %}
+<main class="py-4" style="min-height: calc(100vh - 120px);">
+    <div class="container">
+        <!-- Room Info -->
+        <div class="room-info d-flex justify-content-between align-items-center flex-wrap">
+            <div>
+                <h4 class="mb-1">
+                    <span class="online-indicator"></span>
+                    Room: <span class="room-key">{{ room_key }}</span>
+                </h4>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <div>
+                    <label class="small text-muted me-2">Your Name:</label>
+                    <input type="text" class="username-input" id="username" 
+                           value="{{ username }}" onchange="updateUsername()">
+                </div>
+                <button class="btn btn-rust-outline btn-sm" onclick="copyRoomLink()">
+                    <i class="bi bi-share me-1"></i>Share
+                </button>
+            </div>
+        </div>
+        
+        <!-- Chat Container -->
+        <div class="chat-container">
+            <div class="chat-messages" id="chat-messages">
+                <!-- Messages will be loaded here -->
+                <div class="text-center text-muted py-5" id="loading-messages">
+                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                    Loading messages...
+                </div>
+            </div>
+            
+            <!-- Chat Input -->
+            <div class="chat-input-container">
+                <input type="text" class="chat-input" id="message-input" 
+                       placeholder="Type your message..." 
+                       onkeypress="handleKeyPress(event)">
+                <button class="btn btn-rust" onclick="sendMessage()">
+                    <i class="bi bi-send-fill"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const ROOM_KEY = '{{ room_key }}';
+    let ws;
+    let username = document.getElementById('username').value;
+    
+    // Initialize WebSocket connection
+    function initWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/${ROOM_KEY}`;
+        
+        ws = new WebSocket(wsUrl);
+        
+        ws.onopen = function() {
+            console.log('Connected to chat room');
+            // Send join message
+            ws.send(JSON.stringify({
+                type: 'join',
+                username: username
+            }));
+        };
+        
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            displayMessage(data);
+        };
+        
+        ws.onclose = function() {
+            console.log('Disconnected from chat room');
+            // Try to reconnect after 3 seconds
+            setTimeout(initWebSocket, 3000);
+        };
+        
+        ws.onerror = function(error) {
+            console.error('WebSocket error:', error);
+        };
+    }
+    
+    // Load existing messages
+    async function loadMessages() {
+        try {
+            const response = await fetch(`/api/rooms/${ROOM_KEY}/messages`);
+            if (response.ok) {
+                const messages = await response.json();
+                document.getElementById('loading-messages').style.display = 'none';
+                messages.forEach(msg => {
+                    displayMessage({
+                        type: 'chat',
+                        sender_name: msg.sender_name,
+                        content: msg.content,
+                        created_at: msg.created_at
+                    }, false);
+                });
+                scrollToBottom();
+            }
+        } catch (error) {
+            console.error('Failed to load messages:', error);
+            document.getElementById('loading-messages').innerHTML = 
+                '<i class="bi bi-exclamation-circle me-2"></i>Failed to load messages';
+        }
+    }
+    
+    // Display a message in the chat
+    function displayMessage(data, scroll = true) {
+        const messagesContainer = document.getElementById('chat-messages');
+        const loadingDiv = document.getElementById('loading-messages');
+        if (loadingDiv) loadingDiv.style.display = 'none';
+        
+        const messageDiv = document.createElement('div');
+        
+        if (data.type === 'system') {
+            messageDiv.className = 'message message-system';
+            messageDiv.innerHTML = `<small>${data.message}</small>`;
+        } else if (data.type === 'chat') {
+            const isOwn = data.sender_name === username;
+            messageDiv.className = `message ${isOwn ? 'message-own' : ''}`;
+            
+            const time = data.created_at ? new Date(data.created_at).toLocaleTimeString() : new Date().toLocaleTimeString();
+            
+            messageDiv.innerHTML = `
+                <div class="message-sender">${escapeHtml(data.sender_name)}</div>
+                <div class="message-content">${escapeHtml(data.content)}</div>
+                <div class="message-time">${time}</div>
+            `;
+        }
+        
+        messagesContainer.appendChild(messageDiv);
+        if (scroll) scrollToBottom();
+    }
+    
+    // Send a message
+    function sendMessage() {
+        const input = document.getElementById('message-input');
+        const content = input.value.trim();
+        
+        if (content && ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'chat',
+                sender_name: username,
+                content: content,
+                created_at: new Date().toISOString()
+            }));
+            input.value = '';
+        }
+    }
+    
+    // Handle Enter key press
+    function handleKeyPress(event) {
+        if (event.key === 'Enter') {
+            sendMessage();
+        }
+    }
+    
+    // Update username
+    function updateUsername() {
+        const oldUsername = username;
+        username = document.getElementById('username').value.trim() || '{{ username }}';
+        document.getElementById('username').value = username;
+    }
+    
+    // Copy room link
+    function copyRoomLink() {
+        const link = window.location.href;
+        navigator.clipboard.writeText(link).then(() => {
+            alert('Room link copied to clipboard!');
+        });
+    }
+    
+    // Scroll to bottom of messages
+    function scrollToBottom() {
+        const container = document.getElementById('chat-messages');
+        container.scrollTop = container.scrollHeight;
+    }
+    
+    // Escape HTML to prevent XSS
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        loadMessages();
+        initWebSocket();
+    });
+    
+    // Handle page unload
+    window.addEventListener('beforeunload', function() {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'leave',
+                username: username
+            }));
+        }
+    });
+</script>
+{% endblock %}
