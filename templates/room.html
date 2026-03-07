@@ -38,11 +38,22 @@
                 </div>
             </div>
             
+            <!-- Typing Indicator -->
+            <div class="typing-indicator" id="typing-indicator" style="display: none;">
+                <span class="typing-text" id="typing-text"></span>
+                <span class="typing-dots">
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                </span>
+            </div>
+            
             <!-- Chat Input -->
             <div class="chat-input-container">
                 <input type="text" class="chat-input" id="message-input" 
                        placeholder="Type your message..." 
-                       onkeypress="handleKeyPress(event)">
+                       onkeypress="handleKeyPress(event)"
+                       oninput="handleTyping()">
                 <button class="btn btn-rust" onclick="sendMessage()">
                     <i class="bi bi-send-fill"></i>
                 </button>
@@ -67,6 +78,13 @@
     let isConnected = false;
     let reconnectAttempts = 0;
     const MAX_RECONNECT_DELAY = 30000; // Max 30 seconds between reconnect attempts
+    
+    // Typing indicator configuration
+    const TYPING_DEBOUNCE_DELAY = 300; // Debounce delay for typing events
+    const TYPING_TIMEOUT = 3000; // Clear typing status after 3 seconds of inactivity
+    let typingTimer = null;
+    let isTyping = false;
+    let typingUsers = new Map(); // Map of username -> timeout ID
     
     // Update connection status indicator
     function updateConnectionStatus(connected) {
@@ -179,6 +197,12 @@
                 return;
             }
             
+            // Handle typing indicator
+            if (data.type === 'typing') {
+                handleTypingEvent(data);
+                return;
+            }
+            
             displayMessage(data);
         };
         
@@ -266,6 +290,16 @@
         const content = input.value.trim();
         
         if (content && ws && ws.readyState === WebSocket.OPEN) {
+            // Stop typing indicator when message is sent
+            if (isTyping) {
+                isTyping = false;
+                sendTypingStatus(false);
+            }
+            if (typingTimer) {
+                clearTimeout(typingTimer);
+                typingTimer = null;
+            }
+            
             ws.send(JSON.stringify({
                 type: 'chat',
                 sender_name: username,
@@ -318,6 +352,98 @@
             countElement.textContent = count;
         }
         console.log('Online users:', count);
+    }
+    
+    // Handle typing input - send typing indicator with debounce
+    function handleTyping() {
+        const input = document.getElementById('message-input');
+        const hasContent = input.value.trim().length > 0;
+        
+        // Clear existing typing timer
+        if (typingTimer) {
+            clearTimeout(typingTimer);
+        }
+        
+        // Send typing start if not already typing and has content
+        if (!isTyping && hasContent) {
+            isTyping = true;
+            sendTypingStatus(true);
+        }
+        
+        // Set timer to stop typing after inactivity
+        if (hasContent) {
+            typingTimer = setTimeout(() => {
+                if (isTyping) {
+                    isTyping = false;
+                    sendTypingStatus(false);
+                }
+            }, TYPING_TIMEOUT);
+        } else {
+            // If input is empty, stop typing immediately
+            if (isTyping) {
+                isTyping = false;
+                sendTypingStatus(false);
+            }
+        }
+    }
+    
+    // Send typing status to server
+    function sendTypingStatus(typing) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'typing',
+                username: username,
+                is_typing: typing
+            }));
+        }
+    }
+    
+    // Handle received typing event from other users
+    function handleTypingEvent(data) {
+        // Ignore own typing events
+        if (data.username === username) {
+            return;
+        }
+        
+        // Clear existing timeout for this user
+        if (typingUsers.has(data.username)) {
+            clearTimeout(typingUsers.get(data.username));
+            typingUsers.delete(data.username);
+        }
+        
+        if (data.is_typing) {
+            // Add user to typing list with auto-clear timeout
+            const timeoutId = setTimeout(() => {
+                typingUsers.delete(data.username);
+                updateTypingIndicator();
+            }, TYPING_TIMEOUT + 1000); // Extra buffer for network latency
+            
+            typingUsers.set(data.username, timeoutId);
+        }
+        
+        updateTypingIndicator();
+    }
+    
+    // Update typing indicator display
+    function updateTypingIndicator() {
+        const indicator = document.getElementById('typing-indicator');
+        const textElement = document.getElementById('typing-text');
+        
+        const typingUsernames = Array.from(typingUsers.keys());
+        
+        if (typingUsernames.length === 0) {
+            indicator.style.display = 'none';
+        } else {
+            indicator.style.display = 'flex';
+            
+            if (typingUsernames.length === 1) {
+                textElement.textContent = `${typingUsernames[0]} is typing`;
+            } else if (typingUsernames.length === 2) {
+                textElement.textContent = `${typingUsernames[0]} and ${typingUsernames[1]} are typing`;
+            } else {
+                textElement.textContent = `${typingUsernames.length} people are typing`;
+            }
+        }
     }
     
     // Initialize on page load

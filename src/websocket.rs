@@ -26,6 +26,8 @@ pub enum WsMessage {
     Pong { timestamp: u64 },
     #[serde(rename = "user_count")]
     UserCount { count: usize },
+    #[serde(rename = "typing")]
+    Typing { username: String, is_typing: bool },
 }
 
 /// Room channel for broadcasting messages

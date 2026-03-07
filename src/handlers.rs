@@ -261,6 +261,13 @@ async fn handle_socket(socket: WebSocket, room_key: String, state: AppState) {
                                     // Also mark as alive since client is active
                                     alive_clone.store(true, Ordering::SeqCst);
                                 }
+                                WsMessage::Typing { username, is_typing } => {
+                                    // Broadcast typing indicator to all clients
+                                    let typing_msg = WsMessage::Typing { username, is_typing };
+                                    if let Ok(json) = serde_json::to_string(&typing_msg) {
+                                        let _ = room_channel_clone.tx.send(json);
+                                    }
+                                }
                                 _ => {}
                             }
                         }
