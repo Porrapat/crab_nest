@@ -122,6 +122,10 @@ async fn handle_socket(socket: WebSocket, room_key: String, state: AppState) {
         let _ = state.db.create_room(&room_key, &room_name).await;
     }
 
+    // Increment user count when connection is established
+    room_channel.user_joined();
+    room_channel.broadcast_user_count();
+
     // Channel for sending messages to the client (from broadcast and heartbeat)
     let (tx, mut rx) = mpsc::channel::<Message>(100);
 
@@ -304,4 +308,8 @@ async fn handle_socket(socket: WebSocket, room_key: String, state: AppState) {
             heartbeat_task.abort();
         }
     }
+
+    // Decrement user count when connection ends
+    room_channel.user_left();
+    room_channel.broadcast_user_count();
 }

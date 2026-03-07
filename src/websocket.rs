@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 
@@ -23,17 +24,54 @@ pub enum WsMessage {
     Ping { timestamp: u64 },
     #[serde(rename = "pong")]
     Pong { timestamp: u64 },
+    #[serde(rename = "user_count")]
+    UserCount { count: usize },
 }
 
 /// Room channel for broadcasting messages
 pub struct RoomChannel {
     pub tx: broadcast::Sender<String>,
+    pub user_count: AtomicUsize,
 }
 
 impl RoomChannel {
     pub fn new() -> Self {
         let (tx, _) = broadcast::channel(100);
-        Self { tx }
+        Self { 
+            tx,
+            user_count: AtomicUsize::new(0),
+        }
+    }
+
+    /// Increment user count and return new count
+    pub fn user_joined(&self) -> usize {
+        self.user_count.fetch_add(1, Ordering::SeqCst) + 1
+    }
+
+    /// Decrement user count and return new count
+    pub fn user_left(&self) -> usize {
+        let prev = self.user_count.fetch_sub(1, Ordering::SeqCst);
+        if prev == 0 {
+            // Prevent underflow
+            self.user_count.store(0, Ordering::SeqCst);
+            0
+        } else {
+            prev - 1
+        }
+    }
+
+    /// Get current user count
+    pub fn get_user_count(&self) -> usize {
+        self.user_count.load(Ordering::SeqCst)
+    }
+
+    /// Broadcast user count to all clients
+    pub fn broadcast_user_count(&self) {
+        let count = self.get_user_count();
+        let msg = WsMessage::UserCount { count };
+        if let Ok(json) = serde_json::to_string(&msg) {
+            let _ = self.tx.send(json);
+        }
     }
 }
 
