@@ -28,3 +28,6 @@ async-trait = "0.1"
 
 # Templating
 askama = "0.12"
+
+# Environment
+dotenvy = "0.15"

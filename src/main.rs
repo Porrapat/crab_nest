@@ -20,6 +20,9 @@ pub struct AppState {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Load environment variables from .env file
+    dotenvy::dotenv().ok();
+
     // Initialize database
     let database_url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "sqlite:crab_nest.db?mode=rwc".to_string());
@@ -52,8 +55,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nest_service("/static", ServeDir::new("static"))
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
-    println!("🦀 CrabNest is running on http://localhost:3000");
+    let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+    let port = std::env::var("PORT").unwrap_or_else(|_| "3000".to_string());
+    let addr = format!("{}:{}", host, port);
+    
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    println!("🦀 CrabNest is running on http://{}:{}", host, port);
     
     axum::serve(listener, app).await?;
     Ok(())

@@ -289,6 +289,7 @@ dependencies = [
  "async-trait",
  "axum",
  "chrono",
+ "dotenvy",
  "futures",
  "rand 0.8.5",
  "serde",
