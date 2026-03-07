@@ -19,6 +19,10 @@ pub enum WsMessage {
     Leave { username: String },
     #[serde(rename = "system")]
     System { message: String },
+    #[serde(rename = "ping")]
+    Ping { timestamp: u64 },
+    #[serde(rename = "pong")]
+    Pong { timestamp: u64 },
 }
 
 /// Room channel for broadcasting messages

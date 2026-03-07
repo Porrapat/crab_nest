@@ -9,6 +9,10 @@ use axum::{
 };
 use futures::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::mpsc;
 
 use crate::db::ChatMessage;
 use crate::templates::{CreateRoomTemplate, IndexTemplate, RoomTemplate};
@@ -101,13 +105,16 @@ pub async fn websocket_handler(
     ws.on_upgrade(move |socket| handle_socket(socket, room_key, state))
 }
 
+/// Heartbeat interval in seconds
+const HEARTBEAT_INTERVAL: u64 = 30;
+
 /// Handle WebSocket connection
 async fn handle_socket(socket: WebSocket, room_key: String, state: AppState) {
-    let (mut sender, mut receiver) = socket.split();
+    let (mut ws_sender, mut ws_receiver) = socket.split();
 
     // Get or create room channel
     let room_channel = state.room_manager.get_or_create_room(&room_key).await;
-    let mut rx = room_channel.tx.subscribe();
+    let mut broadcast_rx = room_channel.tx.subscribe();
 
     // Ensure room exists in database
     if state.db.get_room_by_key(&room_key).await.unwrap().is_none() {
@@ -115,79 +122,186 @@ async fn handle_socket(socket: WebSocket, room_key: String, state: AppState) {
         let _ = state.db.create_room(&room_key, &room_name).await;
     }
 
-    // Spawn task to forward broadcast messages to this client
+    // Channel for sending messages to the client (from broadcast and heartbeat)
+    let (tx, mut rx) = mpsc::channel::<Message>(100);
+
+    // Flag to track if client is alive (received pong)
+    let alive = Arc::new(AtomicBool::new(true));
+    let alive_clone = alive.clone();
+
+    // Task: Send messages to WebSocket client
     let mut send_task = tokio::spawn(async move {
-        while let Ok(msg) = rx.recv().await {
-            if sender.send(Message::Text(msg.into())).await.is_err() {
+        while let Some(msg) = rx.recv().await {
+            if ws_sender.send(msg).await.is_err() {
                 break;
             }
         }
     });
 
-    // Handle incoming messages from this client
+    // Task: Forward broadcast messages to sender channel
+    let tx_broadcast = tx.clone();
+    let mut broadcast_task = tokio::spawn(async move {
+        while let Ok(msg) = broadcast_rx.recv().await {
+            if tx_broadcast.send(Message::Text(msg.into())).await.is_err() {
+                break;
+            }
+        }
+    });
+
+    // Task: Send periodic heartbeat pings
+    let tx_heartbeat = tx.clone();
+    let alive_heartbeat = alive.clone();
+    let mut heartbeat_task = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(HEARTBEAT_INTERVAL));
+
+        loop {
+            interval.tick().await;
+
+            // Check if client responded to last ping
+            if !alive_heartbeat.load(Ordering::SeqCst) {
+                // Client didn't respond, connection is dead
+                break;
+            }
+
+            // Mark as not alive until we receive a pong
+            alive_heartbeat.store(false, Ordering::SeqCst);
+
+            // Send application-level ping
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64;
+
+            let ping_msg = WsMessage::Ping { timestamp };
+            if let Ok(json) = serde_json::to_string(&ping_msg) {
+                if tx_heartbeat.send(Message::Text(json.into())).await.is_err() {
+                    break;
+                }
+            }
+
+            // Also send WebSocket protocol-level ping
+            if tx_heartbeat.send(Message::Ping(vec![].into())).await.is_err() {
+                break;
+            }
+        }
+    });
+
+    // Task: Handle incoming messages from client
     let room_key_clone = room_key.clone();
     let state_clone = state.clone();
     let room_channel_clone = state.room_manager.get_or_create_room(&room_key).await;
+    let tx_recv = tx.clone();
 
     let mut recv_task = tokio::spawn(async move {
-        while let Some(Ok(msg)) = receiver.next().await {
-            if let Message::Text(text) = msg {
-                // Parse incoming message
-                if let Ok(ws_msg) = serde_json::from_str::<WsMessage>(&text) {
-                    match ws_msg {
-                        WsMessage::Chat {
-                            sender_name,
-                            content,
-                            ..
-                        } => {
-                            // Get room from database
-                            if let Ok(Some(room)) =
-                                state_clone.db.get_room_by_key(&room_key_clone).await
-                            {
-                                // Save message to database
-                                if let Ok(saved_msg) = state_clone
-                                    .db
-                                    .add_message(room.id, &sender_name, &content)
-                                    .await
-                                {
-                                    // Broadcast to all clients
-                                    let broadcast_msg = WsMessage::Chat {
-                                        sender_name: saved_msg.sender_name,
-                                        content: saved_msg.content,
-                                        created_at: saved_msg.created_at,
+        while let Some(result) = ws_receiver.next().await {
+            match result {
+                Ok(msg) => match msg {
+                    Message::Text(text) => {
+                        // Parse incoming message
+                        if let Ok(ws_msg) = serde_json::from_str::<WsMessage>(&text) {
+                            match ws_msg {
+                                WsMessage::Chat {
+                                    sender_name,
+                                    content,
+                                    ..
+                                } => {
+                                    // Get room from database
+                                    if let Ok(Some(room)) =
+                                        state_clone.db.get_room_by_key(&room_key_clone).await
+                                    {
+                                        // Save message to database
+                                        if let Ok(saved_msg) = state_clone
+                                            .db
+                                            .add_message(room.id, &sender_name, &content)
+                                            .await
+                                        {
+                                            // Broadcast to all clients
+                                            let broadcast_msg = WsMessage::Chat {
+                                                sender_name: saved_msg.sender_name,
+                                                content: saved_msg.content,
+                                                created_at: saved_msg.created_at,
+                                            };
+                                            if let Ok(json) = serde_json::to_string(&broadcast_msg)
+                                            {
+                                                let _ = room_channel_clone.tx.send(json);
+                                            }
+                                        }
+                                    }
+                                }
+                                WsMessage::Join { username } => {
+                                    let system_msg = WsMessage::System {
+                                        message: format!("{} has joined the room", username),
                                     };
-                                    if let Ok(json) = serde_json::to_string(&broadcast_msg) {
+                                    if let Ok(json) = serde_json::to_string(&system_msg) {
                                         let _ = room_channel_clone.tx.send(json);
                                     }
                                 }
+                                WsMessage::Leave { username } => {
+                                    let system_msg = WsMessage::System {
+                                        message: format!("{} has left the room", username),
+                                    };
+                                    if let Ok(json) = serde_json::to_string(&system_msg) {
+                                        let _ = room_channel_clone.tx.send(json);
+                                    }
+                                }
+                                WsMessage::Pong { timestamp: _ } => {
+                                    // Client responded to heartbeat
+                                    alive_clone.store(true, Ordering::SeqCst);
+                                }
+                                WsMessage::Ping { timestamp } => {
+                                    // Client sent ping, respond with pong
+                                    let pong_msg = WsMessage::Pong { timestamp };
+                                    if let Ok(json) = serde_json::to_string(&pong_msg) {
+                                        let _ = tx_recv.send(Message::Text(json.into())).await;
+                                    }
+                                    // Also mark as alive since client is active
+                                    alive_clone.store(true, Ordering::SeqCst);
+                                }
+                                _ => {}
                             }
                         }
-                        WsMessage::Join { username } => {
-                            let system_msg = WsMessage::System {
-                                message: format!("{} has joined the room", username),
-                            };
-                            if let Ok(json) = serde_json::to_string(&system_msg) {
-                                let _ = room_channel_clone.tx.send(json);
-                            }
-                        }
-                        WsMessage::Leave { username } => {
-                            let system_msg = WsMessage::System {
-                                message: format!("{} has left the room", username),
-                            };
-                            if let Ok(json) = serde_json::to_string(&system_msg) {
-                                let _ = room_channel_clone.tx.send(json);
-                            }
-                        }
-                        _ => {}
                     }
+                    Message::Pong(_) => {
+                        // WebSocket protocol-level pong received
+                        alive_clone.store(true, Ordering::SeqCst);
+                    }
+                    Message::Ping(data) => {
+                        // Respond to WebSocket protocol-level ping
+                        let _ = tx_recv.send(Message::Pong(data)).await;
+                    }
+                    Message::Close(_) => {
+                        break;
+                    }
+                    _ => {}
+                },
+                Err(_) => {
+                    break;
                 }
             }
         }
     });
 
-    // Wait for either task to finish
+    // Wait for any task to finish, then clean up all tasks
     tokio::select! {
-        _ = (&mut send_task) => recv_task.abort(),
-        _ = (&mut recv_task) => send_task.abort(),
+        _ = (&mut send_task) => {
+            broadcast_task.abort();
+            heartbeat_task.abort();
+            recv_task.abort();
+        }
+        _ = (&mut broadcast_task) => {
+            send_task.abort();
+            heartbeat_task.abort();
+            recv_task.abort();
+        }
+        _ = (&mut heartbeat_task) => {
+            send_task.abort();
+            broadcast_task.abort();
+            recv_task.abort();
+        }
+        _ = (&mut recv_task) => {
+            send_task.abort();
+            broadcast_task.abort();
+            heartbeat_task.abort();
+        }
     }
 }

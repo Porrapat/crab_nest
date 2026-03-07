@@ -55,15 +55,94 @@
     let ws;
     let username = document.getElementById('username').value;
     
+    // Heartbeat configuration
+    const HEARTBEAT_INTERVAL = 25000; // Send ping every 25 seconds
+    const HEARTBEAT_TIMEOUT = 35000;  // Consider connection dead if no pong in 35 seconds
+    let heartbeatTimer = null;
+    let heartbeatTimeoutTimer = null;
+    let lastPongTime = Date.now();
+    let isConnected = false;
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_DELAY = 30000; // Max 30 seconds between reconnect attempts
+    
+    // Update connection status indicator
+    function updateConnectionStatus(connected) {
+        isConnected = connected;
+        const indicator = document.querySelector('.online-indicator');
+        if (indicator) {
+            indicator.style.backgroundColor = connected ? '#28a745' : '#dc3545';
+            indicator.title = connected ? 'Connected' : 'Disconnected - Reconnecting...';
+        }
+    }
+    
+    // Start heartbeat
+    function startHeartbeat() {
+        stopHeartbeat();
+        lastPongTime = Date.now();
+        
+        // Send periodic pings
+        heartbeatTimer = setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const timestamp = Date.now();
+                ws.send(JSON.stringify({
+                    type: 'ping',
+                    timestamp: timestamp
+                }));
+                console.log('Sent heartbeat ping:', timestamp);
+                
+                // Check if we've received a pong recently
+                const timeSinceLastPong = Date.now() - lastPongTime;
+                if (timeSinceLastPong > HEARTBEAT_TIMEOUT) {
+                    console.warn('Heartbeat timeout - no pong received in', timeSinceLastPong, 'ms');
+                    handleConnectionLost();
+                }
+            }
+        }, HEARTBEAT_INTERVAL);
+    }
+    
+    // Stop heartbeat
+    function stopHeartbeat() {
+        if (heartbeatTimer) {
+            clearInterval(heartbeatTimer);
+            heartbeatTimer = null;
+        }
+        if (heartbeatTimeoutTimer) {
+            clearTimeout(heartbeatTimeoutTimer);
+            heartbeatTimeoutTimer = null;
+        }
+    }
+    
+    // Handle connection lost
+    function handleConnectionLost() {
+        stopHeartbeat();
+        updateConnectionStatus(false);
+        if (ws) {
+            ws.close();
+        }
+    }
+    
+    // Calculate reconnect delay with exponential backoff
+    function getReconnectDelay() {
+        const baseDelay = 1000;
+        const delay = Math.min(baseDelay * Math.pow(2, reconnectAttempts), MAX_RECONNECT_DELAY);
+        return delay;
+    }
+    
     // Initialize WebSocket connection
     function initWebSocket() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}/ws/${ROOM_KEY}`;
         
+        updateConnectionStatus(false);
+        
         ws = new WebSocket(wsUrl);
         
         ws.onopen = function() {
             console.log('Connected to chat room');
+            reconnectAttempts = 0;
+            updateConnectionStatus(true);
+            startHeartbeat();
+            
             // Send join message
             ws.send(JSON.stringify({
                 type: 'join',
@@ -73,17 +152,42 @@
         
         ws.onmessage = function(event) {
             const data = JSON.parse(event.data);
+            
+            // Handle pong response
+            if (data.type === 'pong') {
+                lastPongTime = Date.now();
+                console.log('Received heartbeat pong:', data.timestamp);
+                return;
+            }
+            
+            // Handle ping from server (respond with pong)
+            if (data.type === 'ping') {
+                ws.send(JSON.stringify({
+                    type: 'pong',
+                    timestamp: data.timestamp
+                }));
+                lastPongTime = Date.now();
+                return;
+            }
+            
             displayMessage(data);
         };
         
-        ws.onclose = function() {
-            console.log('Disconnected from chat room');
-            // Try to reconnect after 3 seconds
-            setTimeout(initWebSocket, 3000);
+        ws.onclose = function(event) {
+            console.log('Disconnected from chat room. Code:', event.code, 'Reason:', event.reason);
+            stopHeartbeat();
+            updateConnectionStatus(false);
+            
+            // Reconnect with exponential backoff
+            reconnectAttempts++;
+            const delay = getReconnectDelay();
+            console.log(`Attempting to reconnect in ${delay}ms (attempt ${reconnectAttempts})`);
+            setTimeout(initWebSocket, delay);
         };
         
         ws.onerror = function(error) {
             console.error('WebSocket error:', error);
+            updateConnectionStatus(false);
         };
     }
     
