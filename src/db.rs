@@ -135,7 +135,7 @@ impl Database {
         .await?;
 
         let message = sqlx::query_as::<_, ChatMessage>(
-            "SELECT * FROM messages WHERE id = ?"
+            "SELECT id, room_id, sender_name, content, (replace(created_at, ' ', 'T') || 'Z') as created_at FROM messages WHERE id = ?"
         )
         .bind(result.last_insert_rowid())
         .fetch_one(&self.pool)
@@ -160,7 +160,9 @@ impl Database {
     pub async fn get_messages_by_room_key(&self, room_key: &str) -> Result<Vec<ChatMessage>, sqlx::Error> {
         let messages = sqlx::query_as::<_, ChatMessage>(
             r#"
-            SELECT m.* FROM messages m
+            SELECT m.id, m.room_id, m.sender_name, m.content, 
+                   (replace(m.created_at, ' ', 'T') || 'Z') as created_at 
+            FROM messages m
             JOIN rooms r ON m.room_id = r.id
             WHERE r.room_key = ?
             ORDER BY m.created_at ASC

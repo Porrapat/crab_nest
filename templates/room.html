@@ -230,7 +230,9 @@
             const isOwn = data.sender_name === username;
             messageDiv.className = `message ${isOwn ? 'message-own' : ''}`;
             
-            const date = data.created_at ? new Date(data.created_at) : new Date();
+            // Append 'Z' to indicate UTC if the timestamp doesn't have timezone info
+            const timestamp = data.created_at && !data.created_at.endsWith('Z') ? data.created_at + 'Z' : data.created_at;
+            const date = timestamp ? new Date(timestamp) : new Date();
             const time = date.getUTCFullYear() + '-' + 
                 String(date.getUTCMonth() + 1).padStart(2, '0') + '-' + 
                 String(date.getUTCDate()).padStart(2, '0') + ' ' + 
