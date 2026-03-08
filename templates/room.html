@@ -55,10 +55,6 @@
                        onkeypress="handleKeyPress(event)"
                        oninput="handleTyping()">
                 <button class="btn btn-voice" id="voice-btn" 
-                        onmousedown="startRecording()" 
-                        onmouseup="stopRecording()"
-                        ontouchstart="startRecording()"
-                        ontouchend="stopRecording()"
                         title="Hold to record voice message">
                     <i class="bi bi-mic-fill" id="voice-icon"></i>
                 </button>
@@ -496,7 +492,48 @@
     document.addEventListener('DOMContentLoaded', function() {
         loadMessages();
         initWebSocket();
+        initVoiceButton();
     });
+    
+    // Initialize voice button with Pointer Events
+    function initVoiceButton() {
+        const voiceBtn = document.getElementById('voice-btn');
+        if (!voiceBtn) return;
+        
+        // Prevent default touch behavior to avoid conflicts
+        voiceBtn.style.touchAction = 'none';
+        
+        // pointerdown - start recording
+        voiceBtn.addEventListener('pointerdown', function(e) {
+            e.preventDefault();
+            // Capture the pointer to receive events even if pointer leaves the element
+            voiceBtn.setPointerCapture(e.pointerId);
+            startRecording();
+        });
+        
+        // pointerup - stop recording
+        voiceBtn.addEventListener('pointerup', function(e) {
+            e.preventDefault();
+            voiceBtn.releasePointerCapture(e.pointerId);
+            stopRecording();
+        });
+        
+        // pointercancel - fallback stop (e.g., system interruption)
+        voiceBtn.addEventListener('pointercancel', function(e) {
+            e.preventDefault();
+            stopRecording();
+        });
+        
+        // pointerleave - stop recording if pointer leaves the button
+        // Only triggers if pointer capture is not active
+        voiceBtn.addEventListener('pointerleave', function(e) {
+            // Only stop if we're not using pointer capture
+            // When pointer capture is active, pointerleave won't fire until release
+            if (isRecording && !voiceBtn.hasPointerCapture(e.pointerId)) {
+                stopRecording();
+            }
+        });
+    }
     
     // Handle page unload
     window.addEventListener('beforeunload', function() {
