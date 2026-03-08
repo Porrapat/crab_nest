@@ -500,9 +500,35 @@ pub async fn delete_message(
             })
         ))?;
 
-    // Attempt to delete the message
+    // Get message details before deletion to check for voice file
+    let message = state.db.get_message_by_id(message_id).await
+        .map_err(|e| (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(DeleteMessageResponse {
+                success: false,
+                message: format!("Database error: {}", e),
+            })
+        ))?;
+
+    // Attempt to delete the message from database
     match state.db.delete_message(message_id, &payload.sender_name).await {
         Ok(true) => {
+            // If message was a voice message, delete the voice file from disk
+            if let Some(msg) = message {
+                if msg.message_type == "voice" {
+                    if let Some(voice_path) = msg.voice_path {
+                        // Convert URL path to file system path (remove leading slash)
+                        let file_path = voice_path.trim_start_matches('/');
+                        if let Err(e) = tokio::fs::remove_file(file_path).await {
+                            // Log the error but don't fail the request - DB record is already deleted
+                            eprintln!("Warning: Failed to delete voice file '{}': {}", file_path, e);
+                        } else {
+                            println!("✅ Deleted voice file: {}", file_path);
+                        }
+                    }
+                }
+            }
+
             // Broadcast message deletion to all clients in the room
             let delete_msg = WsMessage::MessageDeleted { message_id };
             if let Ok(json) = serde_json::to_string(&delete_msg) {
