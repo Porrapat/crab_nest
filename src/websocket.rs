@@ -12,6 +12,16 @@ pub enum WsMessage {
     Chat {
         sender_name: String,
         content: String,
+        #[serde(default = "default_message_type")]
+        message_type: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        voice_url: Option<String>,
+        created_at: String,
+    },
+    #[serde(rename = "voice")]
+    Voice {
+        sender_name: String,
+        voice_url: String,
         created_at: String,
     },
     #[serde(rename = "join")]
@@ -28,6 +38,10 @@ pub enum WsMessage {
     UserCount { count: usize },
     #[serde(rename = "typing")]
     Typing { username: String, is_typing: bool },
+}
+
+fn default_message_type() -> String {
+    "text".to_string()
 }
 
 /// Room channel for broadcasting messages

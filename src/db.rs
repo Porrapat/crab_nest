@@ -24,6 +24,8 @@ pub struct ChatMessage {
     pub room_id: i64,
     pub sender_name: String,
     pub content: String,
+    pub message_type: String,
+    pub voice_path: Option<String>,
     pub created_at: String,
 }
 
@@ -50,6 +52,8 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
             room_id INTEGER NOT NULL,
             sender_name TEXT NOT NULL,
             content TEXT NOT NULL,
+            message_type TEXT DEFAULT 'text',
+            voice_path TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
         )
@@ -65,6 +69,34 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id)")
         .execute(pool)
         .await?;
+
+    // Migration: Add message_type column if it doesn't exist
+    let message_type_exists: Option<(String,)> = sqlx::query_as(
+        "SELECT name FROM pragma_table_info('messages') WHERE name = 'message_type'"
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    if message_type_exists.is_none() {
+        sqlx::query("ALTER TABLE messages ADD COLUMN message_type TEXT DEFAULT 'text'")
+            .execute(pool)
+            .await?;
+        println!("✅ Added message_type column to messages table");
+    }
+
+    // Migration: Add voice_path column if it doesn't exist
+    let voice_path_exists: Option<(String,)> = sqlx::query_as(
+        "SELECT name FROM pragma_table_info('messages') WHERE name = 'voice_path'"
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    if voice_path_exists.is_none() {
+        sqlx::query("ALTER TABLE messages ADD COLUMN voice_path TEXT")
+            .execute(pool)
+            .await?;
+        println!("✅ Added voice_path column to messages table");
+    }
 
     println!("✅ Database migrations completed");
     Ok(())
@@ -118,7 +150,7 @@ impl Database {
         Ok(rooms)
     }
 
-    /// Add message to room
+    /// Add text message to room
     pub async fn add_message(
         &self,
         room_id: i64,
@@ -126,7 +158,7 @@ impl Database {
         content: &str,
     ) -> Result<ChatMessage, sqlx::Error> {
         let result = sqlx::query(
-            "INSERT INTO messages (room_id, sender_name, content) VALUES (?, ?, ?)"
+            "INSERT INTO messages (room_id, sender_name, content, message_type) VALUES (?, ?, ?, 'text')"
         )
         .bind(room_id)
         .bind(sender_name)
@@ -135,7 +167,41 @@ impl Database {
         .await?;
 
         let message = sqlx::query_as::<_, ChatMessage>(
-            "SELECT id, room_id, sender_name, content, (replace(created_at, ' ', 'T') || 'Z') as created_at FROM messages WHERE id = ?"
+            r#"SELECT id, room_id, sender_name, content, 
+                      COALESCE(message_type, 'text') as message_type, 
+                      voice_path,
+                      (replace(created_at, ' ', 'T') || 'Z') as created_at 
+               FROM messages WHERE id = ?"#
+        )
+        .bind(result.last_insert_rowid())
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(message)
+    }
+
+    /// Add voice message to room
+    pub async fn add_voice_message(
+        &self,
+        room_id: i64,
+        sender_name: &str,
+        voice_path: &str,
+    ) -> Result<ChatMessage, sqlx::Error> {
+        let result = sqlx::query(
+            "INSERT INTO messages (room_id, sender_name, content, message_type, voice_path) VALUES (?, ?, '', 'voice', ?)"
+        )
+        .bind(room_id)
+        .bind(sender_name)
+        .bind(voice_path)
+        .execute(&self.pool)
+        .await?;
+
+        let message = sqlx::query_as::<_, ChatMessage>(
+            r#"SELECT id, room_id, sender_name, content, 
+                      COALESCE(message_type, 'text') as message_type, 
+                      voice_path,
+                      (replace(created_at, ' ', 'T') || 'Z') as created_at 
+               FROM messages WHERE id = ?"#
         )
         .bind(result.last_insert_rowid())
         .fetch_one(&self.pool)
@@ -161,6 +227,8 @@ impl Database {
         let messages = sqlx::query_as::<_, ChatMessage>(
             r#"
             SELECT m.id, m.room_id, m.sender_name, m.content, 
+                   COALESCE(m.message_type, 'text') as message_type,
+                   m.voice_path,
                    (replace(m.created_at, ' ', 'T') || 'Z') as created_at 
             FROM messages m
             JOIN rooms r ON m.room_id = r.id

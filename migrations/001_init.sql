@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS messages (
     room_id INTEGER NOT NULL,
     sender_name TEXT NOT NULL,
     content TEXT NOT NULL,
+    message_type TEXT DEFAULT 'text',
+    voice_path TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
 );

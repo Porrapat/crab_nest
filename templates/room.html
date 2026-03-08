@@ -54,9 +54,24 @@
                        placeholder="Type your message..." 
                        onkeypress="handleKeyPress(event)"
                        oninput="handleTyping()">
+                <button class="btn btn-voice" id="voice-btn" 
+                        onmousedown="startRecording()" 
+                        onmouseup="stopRecording()"
+                        ontouchstart="startRecording()"
+                        ontouchend="stopRecording()"
+                        title="Hold to record voice message">
+                    <i class="bi bi-mic-fill" id="voice-icon"></i>
+                </button>
                 <button class="btn btn-rust" onclick="sendMessage()">
                     <i class="bi bi-send-fill"></i>
                 </button>
+            </div>
+            
+            <!-- Voice Recording Indicator -->
+            <div class="voice-recording-indicator" id="voice-recording-indicator" style="display: none;">
+                <div class="recording-pulse"></div>
+                <span class="recording-text">Recording... Release to send</span>
+                <span class="recording-time" id="recording-time">00:00</span>
             </div>
         </div>
     </div>
@@ -232,12 +247,22 @@
                 const messages = await response.json();
                 document.getElementById('loading-messages').style.display = 'none';
                 messages.forEach(msg => {
-                    displayMessage({
-                        type: 'chat',
-                        sender_name: msg.sender_name,
-                        content: msg.content,
-                        created_at: msg.created_at
-                    }, false);
+                    if (msg.message_type === 'voice' && msg.voice_path) {
+                        displayMessage({
+                            type: 'voice',
+                            sender_name: msg.sender_name,
+                            voice_url: msg.voice_path,
+                            created_at: msg.created_at
+                        }, false);
+                    } else {
+                        displayMessage({
+                            type: 'chat',
+                            sender_name: msg.sender_name,
+                            content: msg.content,
+                            message_type: msg.message_type || 'text',
+                            created_at: msg.created_at
+                        }, false);
+                    }
                 });
                 scrollToBottom();
             }
@@ -259,6 +284,32 @@
         if (data.type === 'system') {
             messageDiv.className = 'message message-system';
             messageDiv.innerHTML = `<small>${data.message}</small>`;
+        } else if (data.type === 'voice') {
+            const isOwn = data.sender_name === username;
+            messageDiv.className = `message message-voice ${isOwn ? 'message-own' : ''}`;
+            
+            const timestamp = data.created_at && !data.created_at.endsWith('Z') ? data.created_at + 'Z' : data.created_at;
+            const date = timestamp ? new Date(timestamp) : new Date();
+            const time = formatTime(date);
+            const uniqueId = 'voice-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            
+            messageDiv.innerHTML = `
+                <div class="message-sender">${escapeHtml(data.sender_name)}</div>
+                <div class="voice-message-content">
+                    <button class="voice-play-btn" onclick="toggleVoicePlay('${uniqueId}', '${data.voice_url}')">
+                        <i class="bi bi-play-fill" id="${uniqueId}-icon"></i>
+                    </button>
+                    <div class="voice-waveform">
+                        <div class="voice-progress" id="${uniqueId}-progress"></div>
+                    </div>
+                    <span class="voice-duration" id="${uniqueId}-duration">--:--</span>
+                    <audio id="${uniqueId}" src="${data.voice_url}" preload="metadata"
+                           onloadedmetadata="updateVoiceDuration('${uniqueId}')"
+                           ontimeupdate="updateVoiceProgress('${uniqueId}')"
+                           onended="resetVoicePlayer('${uniqueId}')"></audio>
+                </div>
+                <div class="message-time">${time}</div>
+            `;
         } else if (data.type === 'chat') {
             const isOwn = data.sender_name === username;
             messageDiv.className = `message ${isOwn ? 'message-own' : ''}`;
@@ -266,12 +317,7 @@
             // Append 'Z' to indicate UTC if the timestamp doesn't have timezone info
             const timestamp = data.created_at && !data.created_at.endsWith('Z') ? data.created_at + 'Z' : data.created_at;
             const date = timestamp ? new Date(timestamp) : new Date();
-            const time = date.getUTCFullYear() + '-' + 
-                String(date.getUTCMonth() + 1).padStart(2, '0') + '-' + 
-                String(date.getUTCDate()).padStart(2, '0') + ' ' + 
-                String(date.getUTCHours()).padStart(2, '0') + ':' + 
-                String(date.getUTCMinutes()).padStart(2, '0') + ':' + 
-                String(date.getUTCSeconds()).padStart(2, '0');
+            const time = formatTime(date);
             
             messageDiv.innerHTML = `
                 <div class="message-sender">${escapeHtml(data.sender_name)}</div>
@@ -461,5 +507,236 @@
             }));
         }
     });
+    
+    // Format time helper
+    function formatTime(date) {
+        return date.getUTCFullYear() + '-' + 
+            String(date.getUTCMonth() + 1).padStart(2, '0') + '-' + 
+            String(date.getUTCDate()).padStart(2, '0') + ' ' + 
+            String(date.getUTCHours()).padStart(2, '0') + ':' + 
+            String(date.getUTCMinutes()).padStart(2, '0') + ':' + 
+            String(date.getUTCSeconds()).padStart(2, '0');
+    }
+    
+    // ========== Voice Recording Functions ==========
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let isRecording = false;
+    let recordingStartTime = null;
+    let recordingTimer = null;
+    const MAX_RECORDING_TIME = 30000; // 30 seconds max
+    
+    // Check if browser supports audio recording
+    function checkMediaRecorderSupport() {
+        return navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder;
+    }
+    
+    // Start recording
+    async function startRecording() {
+        if (!checkMediaRecorderSupport()) {
+            alert('Your browser does not support audio recording.');
+            return;
+        }
+        
+        if (isRecording) return;
+        
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            
+            // Determine the best supported format
+            let mimeType = 'audio/webm';
+            if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+                mimeType = 'audio/webm;codecs=opus';
+            } else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+                mimeType = 'audio/ogg;codecs=opus';
+            } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                mimeType = 'audio/mp4';
+            }
+            
+            mediaRecorder = new MediaRecorder(stream, { mimeType });
+            audioChunks = [];
+            
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    audioChunks.push(event.data);
+                }
+            };
+            
+            mediaRecorder.onstop = async () => {
+                // Stop all tracks
+                stream.getTracks().forEach(track => track.stop());
+                
+                // Only send if we have audio data and recording wasn't cancelled
+                if (audioChunks.length > 0 && isRecording) {
+                    const audioBlob = new Blob(audioChunks, { type: mimeType });
+                    await uploadVoiceMessage(audioBlob);
+                }
+                
+                isRecording = false;
+                hideRecordingIndicator();
+            };
+            
+            mediaRecorder.start(100); // Collect data every 100ms
+            isRecording = true;
+            recordingStartTime = Date.now();
+            
+            showRecordingIndicator();
+            startRecordingTimer();
+            
+            // Auto-stop after max recording time
+            setTimeout(() => {
+                if (isRecording) {
+                    stopRecording();
+                }
+            }, MAX_RECORDING_TIME);
+            
+        } catch (error) {
+            console.error('Failed to start recording:', error);
+            if (error.name === 'NotAllowedError') {
+                alert('Microphone access was denied. Please allow microphone access to record voice messages.');
+            } else {
+                alert('Failed to start recording: ' + error.message);
+            }
+        }
+    }
+    
+    // Stop recording
+    function stopRecording() {
+        if (mediaRecorder && isRecording) {
+            mediaRecorder.stop();
+            stopRecordingTimer();
+        }
+    }
+    
+    // Upload voice message to server
+    async function uploadVoiceMessage(audioBlob) {
+        const formData = new FormData();
+        formData.append('sender_name', username);
+        formData.append('audio', audioBlob, 'voice.webm');
+        
+        try {
+            const response = await fetch(`/api/rooms/${ROOM_KEY}/voice`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                const error = await response.text();
+                console.error('Failed to upload voice message:', error);
+                alert('Failed to send voice message: ' + error);
+            }
+        } catch (error) {
+            console.error('Failed to upload voice message:', error);
+            alert('Failed to send voice message: ' + error.message);
+        }
+    }
+    
+    // Show recording indicator
+    function showRecordingIndicator() {
+        const indicator = document.getElementById('voice-recording-indicator');
+        const voiceBtn = document.getElementById('voice-btn');
+        const voiceIcon = document.getElementById('voice-icon');
+        
+        indicator.style.display = 'flex';
+        voiceBtn.classList.add('recording');
+        voiceIcon.className = 'bi bi-stop-circle-fill';
+    }
+    
+    // Hide recording indicator
+    function hideRecordingIndicator() {
+        const indicator = document.getElementById('voice-recording-indicator');
+        const voiceBtn = document.getElementById('voice-btn');
+        const voiceIcon = document.getElementById('voice-icon');
+        
+        indicator.style.display = 'none';
+        voiceBtn.classList.remove('recording');
+        voiceIcon.className = 'bi bi-mic-fill';
+    }
+    
+    // Start recording timer display
+    function startRecordingTimer() {
+        const timeDisplay = document.getElementById('recording-time');
+        recordingTimer = setInterval(() => {
+            const elapsed = Date.now() - recordingStartTime;
+            const seconds = Math.floor(elapsed / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            timeDisplay.textContent = `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }, 100);
+    }
+    
+    // Stop recording timer
+    function stopRecordingTimer() {
+        if (recordingTimer) {
+            clearInterval(recordingTimer);
+            recordingTimer = null;
+        }
+    }
+    
+    // ========== Voice Playback Functions ==========
+    let currentlyPlaying = null;
+    
+    function toggleVoicePlay(audioId, voiceUrl) {
+        const audio = document.getElementById(audioId);
+        const icon = document.getElementById(audioId + '-icon');
+        
+        if (!audio) return;
+        
+        // Pause any currently playing audio
+        if (currentlyPlaying && currentlyPlaying !== audioId) {
+            const prevAudio = document.getElementById(currentlyPlaying);
+            const prevIcon = document.getElementById(currentlyPlaying + '-icon');
+            if (prevAudio) {
+                prevAudio.pause();
+                prevAudio.currentTime = 0;
+            }
+            if (prevIcon) {
+                prevIcon.className = 'bi bi-play-fill';
+            }
+        }
+        
+        if (audio.paused) {
+            audio.play();
+            icon.className = 'bi bi-pause-fill';
+            currentlyPlaying = audioId;
+        } else {
+            audio.pause();
+            icon.className = 'bi bi-play-fill';
+            currentlyPlaying = null;
+        }
+    }
+    
+    function updateVoiceDuration(audioId) {
+        const audio = document.getElementById(audioId);
+        const durationEl = document.getElementById(audioId + '-duration');
+        
+        if (audio && durationEl && audio.duration && isFinite(audio.duration)) {
+            const duration = Math.floor(audio.duration);
+            const minutes = Math.floor(duration / 60);
+            const seconds = duration % 60;
+            durationEl.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+    }
+    
+    function updateVoiceProgress(audioId) {
+        const audio = document.getElementById(audioId);
+        const progressEl = document.getElementById(audioId + '-progress');
+        
+        if (audio && progressEl && audio.duration) {
+            const progress = (audio.currentTime / audio.duration) * 100;
+            progressEl.style.width = progress + '%';
+        }
+    }
+    
+    function resetVoicePlayer(audioId) {
+        const audio = document.getElementById(audioId);
+        const icon = document.getElementById(audioId + '-icon');
+        const progressEl = document.getElementById(audioId + '-progress');
+        
+        if (icon) icon.className = 'bi bi-play-fill';
+        if (progressEl) progressEl.style.width = '0%';
+        if (audio) audio.currentTime = 0;
+        currentlyPlaying = null;
+    }
 </script>
 {% endblock %}

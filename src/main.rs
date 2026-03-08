@@ -40,6 +40,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let state = AppState { db, room_manager };
 
+    // Create uploads directory if it doesn't exist
+    tokio::fs::create_dir_all("uploads/voice").await.ok();
+
     // Build router
     let app = Router::new()
         // Pages
@@ -49,10 +52,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // API
         .route("/api/rooms", post(handlers::create_room))
         .route("/api/rooms/{room_key}/messages", get(handlers::get_messages))
+        .route("/api/rooms/{room_key}/voice", post(handlers::upload_voice))
         // WebSocket
         .route("/ws/{room_key}", get(handlers::websocket_handler))
         // Static files
         .nest_service("/static", ServeDir::new("static"))
+        // Upload files (voice messages)
+        .nest_service("/uploads", ServeDir::new("uploads"))
         .with_state(state);
 
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());

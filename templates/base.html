@@ -429,6 +429,136 @@
             50% { opacity: 0.5; }
         }
         
+        /* Voice Message Styles */
+        .btn-voice {
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            border: none;
+            color: white;
+            font-weight: 600;
+            padding: 12px 15px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-voice:hover {
+            background: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
+            color: white;
+        }
+        
+        .btn-voice.recording {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            animation: recordingPulse 1s infinite;
+        }
+        
+        @keyframes recordingPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+        }
+        
+        .voice-recording-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 15px;
+            background: rgba(239, 68, 68, 0.1);
+            border-radius: 8px;
+            margin-top: 10px;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        
+        .recording-pulse {
+            width: 12px;
+            height: 12px;
+            background: #ef4444;
+            border-radius: 50%;
+            animation: recordingPulse 1s infinite;
+        }
+        
+        .recording-text {
+            color: #ef4444;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        
+        .recording-time {
+            color: var(--text-primary);
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            margin-left: auto;
+        }
+        
+        /* Voice Message Player */
+        .voice-message-content {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--message-bg);
+            padding: 10px 15px;
+            border-radius: 12px;
+            min-width: 200px;
+            max-width: 300px;
+        }
+        
+        .message-own .voice-message-content {
+            background: var(--message-own-bg);
+        }
+        
+        .voice-play-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            color: white;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            flex-shrink: 0;
+        }
+        
+        .voice-play-btn:hover {
+            background: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
+            transform: scale(1.1);
+        }
+        
+        .voice-waveform {
+            flex: 1;
+            height: 8px;
+            background: rgba(99, 102, 241, 0.2);
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .voice-progress {
+            height: 100%;
+            background: linear-gradient(90deg, #6366f1, #818cf8);
+            border-radius: 4px;
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+        
+        .voice-duration {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-family: 'Courier New', monospace;
+            min-width: 40px;
+            text-align: right;
+        }
+        
+        .message-voice {
+            margin-bottom: 15px;
+        }
+        
+        .message-voice audio {
+            display: none;
+        }
+        
         /* Scrollbar styling */
         ::-webkit-scrollbar {
             width: 8px;

@@ -2,7 +2,7 @@ use askama::Template;
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
-        Path, State,
+        Multipart, Path, State,
     },
     http::StatusCode,
     response::{Html, IntoResponse, Json, Response},
@@ -13,6 +13,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
+use tokio::io::AsyncWriteExt;
 
 use crate::db::ChatMessage;
 use crate::templates::{CreateRoomTemplate, IndexTemplate, RoomTemplate};
@@ -236,6 +237,8 @@ async fn handle_socket(socket: WebSocket, room_key: String, state: AppState) {
                                             let broadcast_msg = WsMessage::Chat {
                                                 sender_name: saved_msg.sender_name,
                                                 content: saved_msg.content,
+                                                message_type: "text".to_string(),
+                                                voice_url: None,
                                                 created_at: saved_msg.created_at,
                                             };
                                             if let Ok(json) = serde_json::to_string(&broadcast_msg)
@@ -332,4 +335,129 @@ async fn handle_socket(socket: WebSocket, room_key: String, state: AppState) {
     // Decrement user count when connection ends
     room_channel.user_left();
     room_channel.broadcast_user_count();
+}
+
+/// Voice upload response
+#[derive(Serialize)]
+pub struct VoiceUploadResponse {
+    pub success: bool,
+    pub voice_url: String,
+    pub message_id: i64,
+}
+
+/// Maximum voice file size (5MB)
+const MAX_VOICE_FILE_SIZE: usize = 5 * 1024 * 1024;
+
+/// API: Upload voice message
+pub async fn upload_voice(
+    State(state): State<AppState>,
+    Path(room_key): Path<String>,
+    mut multipart: Multipart,
+) -> Result<Json<VoiceUploadResponse>, (StatusCode, String)> {
+    let mut sender_name: Option<String> = None;
+    let mut audio_data: Option<Vec<u8>> = None;
+    let mut file_extension = "webm".to_string();
+
+    // Parse multipart form data
+    while let Some(field) = multipart.next_field().await.map_err(|e| {
+        (StatusCode::BAD_REQUEST, format!("Failed to read multipart field: {}", e))
+    })? {
+        let name = field.name().unwrap_or("").to_string();
+        
+        match name.as_str() {
+            "sender_name" => {
+                sender_name = Some(field.text().await.map_err(|e| {
+                    (StatusCode::BAD_REQUEST, format!("Failed to read sender_name: {}", e))
+                })?);
+            }
+            "audio" => {
+                // Get content type to determine file extension
+                if let Some(content_type) = field.content_type() {
+                    if content_type.contains("ogg") {
+                        file_extension = "ogg".to_string();
+                    } else if content_type.contains("webm") {
+                        file_extension = "webm".to_string();
+                    } else if content_type.contains("mp4") || content_type.contains("m4a") {
+                        file_extension = "m4a".to_string();
+                    }
+                }
+                
+                let data = field.bytes().await.map_err(|e| {
+                    (StatusCode::BAD_REQUEST, format!("Failed to read audio data: {}", e))
+                })?;
+                
+                // Check file size
+                if data.len() > MAX_VOICE_FILE_SIZE {
+                    return Err((
+                        StatusCode::PAYLOAD_TOO_LARGE,
+                        "Voice file too large. Maximum size is 5MB".to_string(),
+                    ));
+                }
+                
+                audio_data = Some(data.to_vec());
+            }
+            _ => {}
+        }
+    }
+
+    // Validate required fields
+    let sender_name = sender_name.ok_or((
+        StatusCode::BAD_REQUEST,
+        "sender_name is required".to_string(),
+    ))?;
+    
+    let audio_data = audio_data.ok_or((
+        StatusCode::BAD_REQUEST,
+        "audio file is required".to_string(),
+    ))?;
+
+    // Get room from database
+    let room = state.db.get_room_by_key(&room_key).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?
+        .ok_or((StatusCode::NOT_FOUND, "Room not found".to_string()))?;
+
+    // Create uploads directory if it doesn't exist
+    let uploads_dir = format!("uploads/voice/{}", room_key);
+    tokio::fs::create_dir_all(&uploads_dir).await.map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create uploads directory: {}", e))
+    })?;
+
+    // Generate unique filename with timestamp
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let filename = format!("{}.{}", timestamp, file_extension);
+    let file_path = format!("{}/{}", uploads_dir, filename);
+    let voice_url = format!("/uploads/voice/{}/{}", room_key, filename);
+
+    // Write audio file
+    let mut file = tokio::fs::File::create(&file_path).await.map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create file: {}", e))
+    })?;
+    
+    file.write_all(&audio_data).await.map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to write file: {}", e))
+    })?;
+
+    // Save voice message to database
+    let saved_msg = state.db.add_voice_message(room.id, &sender_name, &voice_url).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to save message: {}", e)))?;
+
+    // Broadcast voice message to all clients in the room
+    let voice_msg = WsMessage::Voice {
+        sender_name: saved_msg.sender_name.clone(),
+        voice_url: voice_url.clone(),
+        created_at: saved_msg.created_at.clone(),
+    };
+    
+    if let Ok(json) = serde_json::to_string(&voice_msg) {
+        state.room_manager.broadcast(&room_key, &json).await;
+    }
+
+    Ok(Json(VoiceUploadResponse {
+        success: true,
+        voice_url,
+        message_id: saved_msg.id,
+    }))
 }
