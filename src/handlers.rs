@@ -209,6 +209,19 @@ async fn handle_socket(socket: WebSocket, room_key: String, state: AppState) {
                                     content,
                                     ..
                                 } => {
+                                    // Check message length limit (max 2000 characters)
+                                    const MAX_MESSAGE_LENGTH: usize = 2000;
+                                    if content.len() > MAX_MESSAGE_LENGTH {
+                                        // Send error message back to the client
+                                        let error_msg = WsMessage::System {
+                                            message: "Max message length limit at 2000".to_string(),
+                                        };
+                                        if let Ok(json) = serde_json::to_string(&error_msg) {
+                                            let _ = tx_recv.send(Message::Text(json.into())).await;
+                                        }
+                                        continue;
+                                    }
+
                                     // Get room from database
                                     if let Ok(Some(room)) =
                                         state_clone.db.get_room_by_key(&room_key_clone).await
