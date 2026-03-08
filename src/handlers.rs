@@ -235,6 +235,7 @@ async fn handle_socket(socket: WebSocket, room_key: String, state: AppState) {
                                         {
                                             // Broadcast to all clients
                                             let broadcast_msg = WsMessage::Chat {
+                                                id: Some(saved_msg.id),
                                                 sender_name: saved_msg.sender_name,
                                                 content: saved_msg.content,
                                                 message_type: "text".to_string(),
@@ -446,6 +447,7 @@ pub async fn upload_voice(
 
     // Broadcast voice message to all clients in the room
     let voice_msg = WsMessage::Voice {
+        id: Some(saved_msg.id),
         sender_name: saved_msg.sender_name.clone(),
         voice_url: voice_url.clone(),
         created_at: saved_msg.created_at.clone(),

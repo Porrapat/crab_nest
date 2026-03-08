@@ -10,16 +10,21 @@ use tokio::sync::{broadcast, RwLock};
 pub enum WsMessage {
     #[serde(rename = "chat")]
     Chat {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        id: Option<i64>,
         sender_name: String,
         content: String,
         #[serde(default = "default_message_type")]
         message_type: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         voice_url: Option<String>,
+        #[serde(default)]
         created_at: String,
     },
     #[serde(rename = "voice")]
     Voice {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        id: Option<i64>,
         sender_name: String,
         voice_url: String,
         created_at: String,
