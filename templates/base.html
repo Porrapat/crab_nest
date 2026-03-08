@@ -361,10 +361,13 @@
         .chat-input-container {
             display: flex;
             gap: 10px;
+            flex-wrap: nowrap;
+            max-width: 100%;
         }
         
         .chat-input {
             flex: 1;
+            min-width: 0;
             background: var(--input-bg);
             border: 1px solid var(--card-border);
             color: var(--text-primary);
@@ -661,6 +664,55 @@
         
         [data-theme="dark"] .navbar-toggler {
             border-color: var(--rust-primary);
+        }
+        
+        /* Mobile responsive styles */
+        @media (max-width: 576px) {
+            .chat-input-container {
+                gap: 6px;
+            }
+            
+            .chat-input {
+                padding: 10px 12px;
+                font-size: 14px;
+            }
+            
+            .btn-rust {
+                padding: 10px 12px;
+            }
+            
+            .btn-voice {
+                padding: 10px 12px;
+            }
+            
+            .chat-input-container .btn-rust,
+            .chat-input-container .btn-voice {
+                flex-shrink: 0;
+            }
+            
+            .room-info {
+                padding: 12px 15px;
+            }
+            
+            .room-info h4 {
+                font-size: 1rem;
+            }
+            
+            .username-input {
+                width: 120px;
+                padding: 6px 10px;
+                font-size: 0.85rem;
+            }
+            
+            .btn-rust-outline.btn-sm {
+                padding: 6px 12px;
+                font-size: 0.8rem;
+            }
+            
+            .voice-message-content {
+                min-width: 150px;
+                max-width: 250px;
+            }
         }
     </style>
     {% block extra_css %}{% endblock %}
