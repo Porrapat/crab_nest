@@ -48,6 +48,17 @@
                 </span>
             </div>
             
+            <!-- Microphone Selection -->
+            <div class="microphone-selection mb-2" id="microphone-selection" style="display: none;">
+                <label class="small text-muted me-2">
+                    <i class="bi bi-mic me-1"></i>Microphone:
+                </label>
+                <select class="form-select form-select-sm d-inline-block" id="microphone-select" 
+                        style="width: auto; max-width: 250px;" onchange="onMicrophoneChange()">
+                    <option value="">Default microphone</option>
+                </select>
+            </div>
+            
             <!-- Chat Input -->
             <div class="chat-input-container">
                 <input type="text" class="chat-input" id="message-input" 
@@ -562,10 +573,75 @@
     let recordingStartTime = null;
     let recordingTimer = null;
     const MAX_RECORDING_TIME = 30000; // 30 seconds max
+    let selectedMicrophoneId = ''; // Store the selected microphone deviceId
+    let microphonePermissionGranted = false; // Track if microphone permission has been granted
     
     // Check if browser supports audio recording
     function checkMediaRecorderSupport() {
         return navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder;
+    }
+    
+    // Enumerate and populate microphone list
+    async function populateMicrophones() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+            console.warn('enumerateDevices is not supported');
+            return;
+        }
+        
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const audioInputDevices = devices.filter(device => device.kind === 'audioinput');
+            
+            const micSelect = document.getElementById('microphone-select');
+            const micSelection = document.getElementById('microphone-selection');
+            
+            // Clear existing options except the default one
+            micSelect.innerHTML = '<option value="">Default microphone</option>';
+            
+            // Add microphone options
+            audioInputDevices.forEach((device, index) => {
+                const option = document.createElement('option');
+                option.value = device.deviceId;
+                // Use device label if available, otherwise use a generic name
+                option.textContent = device.label || `Microphone ${index + 1}`;
+                micSelect.appendChild(option);
+            });
+            
+            // Show microphone selection if we have more than one microphone
+            if (audioInputDevices.length > 0) {
+                micSelection.style.display = 'block';
+            }
+            
+            // Restore previously selected microphone if it still exists
+            if (selectedMicrophoneId) {
+                const exists = audioInputDevices.some(d => d.deviceId === selectedMicrophoneId);
+                if (exists) {
+                    micSelect.value = selectedMicrophoneId;
+                } else {
+                    selectedMicrophoneId = '';
+                }
+            }
+            
+            console.log('Found', audioInputDevices.length, 'microphone(s)');
+        } catch (error) {
+            console.error('Failed to enumerate devices:', error);
+        }
+    }
+    
+    // Handle microphone selection change
+    function onMicrophoneChange() {
+        const micSelect = document.getElementById('microphone-select');
+        selectedMicrophoneId = micSelect.value;
+        console.log('Selected microphone:', selectedMicrophoneId || 'default');
+    }
+    
+    // Listen for device changes (e.g., microphone plugged in/out)
+    if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+        navigator.mediaDevices.addEventListener('devicechange', () => {
+            if (microphonePermissionGranted) {
+                populateMicrophones();
+            }
+        });
     }
     
     // Start recording
@@ -578,7 +654,18 @@
         if (isRecording) return;
         
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            // Build audio constraints with selected microphone
+            const audioConstraints = selectedMicrophoneId 
+                ? { deviceId: { exact: selectedMicrophoneId } }
+                : true;
+            
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+            
+            // After permission is granted, populate the microphone list
+            if (!microphonePermissionGranted) {
+                microphonePermissionGranted = true;
+                await populateMicrophones();
+            }
             
             // Determine the best supported format
             let mimeType = 'audio/webm';
