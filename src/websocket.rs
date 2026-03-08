@@ -38,6 +38,8 @@ pub enum WsMessage {
     UserCount { count: usize },
     #[serde(rename = "typing")]
     Typing { username: String, is_typing: bool },
+    #[serde(rename = "message_deleted")]
+    MessageDeleted { message_id: i64 },
 }
 
 fn default_message_type() -> String {

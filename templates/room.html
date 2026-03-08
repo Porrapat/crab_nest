@@ -225,6 +225,12 @@
                 return;
             }
             
+            // Handle message deletion
+            if (data.type === 'message_deleted') {
+                handleMessageDeleted(data.message_id);
+                return;
+            }
+            
             displayMessage(data);
         };
         
@@ -257,6 +263,7 @@
                     if (msg.message_type === 'voice' && msg.voice_path) {
                         displayMessage({
                             type: 'voice',
+                            id: msg.id,
                             sender_name: msg.sender_name,
                             voice_url: msg.voice_path,
                             created_at: msg.created_at
@@ -264,6 +271,7 @@
                     } else {
                         displayMessage({
                             type: 'chat',
+                            id: msg.id,
                             sender_name: msg.sender_name,
                             content: msg.content,
                             message_type: msg.message_type || 'text',
@@ -279,6 +287,12 @@
                 '<i class="bi bi-exclamation-circle me-2"></i>Failed to load messages';
         }
     }
+    
+    // Delete window in seconds (1 minute)
+    const DELETE_WINDOW_SECONDS = 60;
+    
+    // Store message timers for cleanup
+    const messageDeleteTimers = new Map();
     
     // Display a message in the chat
     function displayMessage(data, scroll = true) {
@@ -299,7 +313,14 @@
             const date = timestamp ? new Date(timestamp) : new Date();
             const time = formatTime(date);
             const uniqueId = 'voice-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            const messageId = data.id || null;
             
+            // Calculate remaining delete time
+            const remainingSeconds = calculateRemainingDeleteTime(date);
+            const showDelete = isOwn && remainingSeconds > 0;
+            const deleteHtml = showDelete ? createDeleteButtonHtml(messageId, remainingSeconds) : '';
+            
+            messageDiv.setAttribute('data-message-id', messageId);
             messageDiv.innerHTML = `
                 <div class="message-sender">${escapeHtml(data.sender_name)}</div>
                 <div class="voice-message-content">
@@ -315,8 +336,15 @@
                            ontimeupdate="updateVoiceProgress('${uniqueId}')"
                            onended="resetVoicePlayer('${uniqueId}')"></audio>
                 </div>
-                <div class="message-time">${time}</div>
+                <div class="message-footer">
+                    <span class="message-time">${time}</span>
+                    ${deleteHtml}
+                </div>
             `;
+            
+            if (showDelete && messageId) {
+                startDeleteCountdown(messageId, remainingSeconds);
+            }
         } else if (data.type === 'chat') {
             const isOwn = data.sender_name === username;
             messageDiv.className = `message ${isOwn ? 'message-own' : ''}`;
@@ -325,16 +353,131 @@
             const timestamp = data.created_at && !data.created_at.endsWith('Z') ? data.created_at + 'Z' : data.created_at;
             const date = timestamp ? new Date(timestamp) : new Date();
             const time = formatTime(date);
+            const messageId = data.id || null;
             
+            // Calculate remaining delete time
+            const remainingSeconds = calculateRemainingDeleteTime(date);
+            const showDelete = isOwn && remainingSeconds > 0;
+            const deleteHtml = showDelete ? createDeleteButtonHtml(messageId, remainingSeconds) : '';
+            
+            messageDiv.setAttribute('data-message-id', messageId);
             messageDiv.innerHTML = `
                 <div class="message-sender">${escapeHtml(data.sender_name)}</div>
                 <div class="message-content">${escapeHtml(data.content)}</div>
-                <div class="message-time">${time}</div>
+                <div class="message-footer">
+                    <span class="message-time">${time}</span>
+                    ${deleteHtml}
+                </div>
             `;
+            
+            if (showDelete && messageId) {
+                startDeleteCountdown(messageId, remainingSeconds);
+            }
         }
         
         messagesContainer.appendChild(messageDiv);
         if (scroll) scrollToBottom();
+    }
+    
+    // Calculate remaining delete time in seconds
+    function calculateRemainingDeleteTime(createdAt) {
+        const now = new Date();
+        const created = new Date(createdAt);
+        const elapsedSeconds = Math.floor((now - created) / 1000);
+        return Math.max(0, DELETE_WINDOW_SECONDS - elapsedSeconds);
+    }
+    
+    // Create delete button HTML with countdown timer
+    function createDeleteButtonHtml(messageId, remainingSeconds) {
+        if (!messageId) return '';
+        const timeStr = formatCountdownTime(remainingSeconds);
+        return `
+            <span class="delete-container" id="delete-container-${messageId}">
+                <span class="delete-countdown" id="delete-countdown-${messageId}">${timeStr}</span>
+                <button class="btn-delete-message" onclick="deleteMessage(${messageId})" title="Delete message">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </span>
+        `;
+    }
+    
+    // Format seconds to MM:SS
+    function formatCountdownTime(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${String(secs).padStart(2, '0')}`;
+    }
+    
+    // Start countdown timer for delete button
+    function startDeleteCountdown(messageId, remainingSeconds) {
+        // Clear existing timer if any
+        if (messageDeleteTimers.has(messageId)) {
+            clearInterval(messageDeleteTimers.get(messageId));
+        }
+        
+        let timeLeft = remainingSeconds;
+        
+        const timer = setInterval(() => {
+            timeLeft--;
+            
+            const countdownEl = document.getElementById(`delete-countdown-${messageId}`);
+            const containerEl = document.getElementById(`delete-container-${messageId}`);
+            
+            if (timeLeft <= 0) {
+                // Time's up - hide delete button
+                clearInterval(timer);
+                messageDeleteTimers.delete(messageId);
+                if (containerEl) {
+                    containerEl.style.display = 'none';
+                }
+            } else if (countdownEl) {
+                countdownEl.textContent = formatCountdownTime(timeLeft);
+            }
+        }, 1000);
+        
+        messageDeleteTimers.set(messageId, timer);
+    }
+    
+    // Delete a message
+    async function deleteMessage(messageId) {
+        try {
+            const response = await fetch(`/api/rooms/${ROOM_KEY}/messages/${messageId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ sender_name: username })
+            });
+            
+            const result = await response.json();
+            
+            if (!response.ok) {
+                if (result.message === 'message_delete_locked') {
+                    alert('Cannot delete message: Delete window (1 minute) has expired.');
+                } else {
+                    alert('Failed to delete message: ' + result.message);
+                }
+            }
+            // If successful, the WebSocket will broadcast the deletion
+        } catch (error) {
+            console.error('Failed to delete message:', error);
+            alert('Failed to delete message: ' + error.message);
+        }
+    }
+    
+    // Handle message deletion from WebSocket
+    function handleMessageDeleted(messageId) {
+        // Remove the message from DOM
+        const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
+        if (messageEl) {
+            messageEl.remove();
+        }
+        
+        // Clear any active timer
+        if (messageDeleteTimers.has(messageId)) {
+            clearInterval(messageDeleteTimers.get(messageId));
+            messageDeleteTimers.delete(messageId);
+        }
     }
     
     // Send a message

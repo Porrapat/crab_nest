@@ -1,4 +1,4 @@
-use axum::{routing::{get, post}, Router};
+use axum::{routing::{delete, get, post}, Router};
 use sqlx::sqlite::SqlitePoolOptions;
 use std::sync::Arc;
 use tower_http::services::ServeDir;
@@ -53,6 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/rooms", post(handlers::create_room))
         .route("/api/rooms/{room_key}/messages", get(handlers::get_messages))
         .route("/api/rooms/{room_key}/voice", post(handlers::upload_voice))
+        .route("/api/rooms/{room_key}/messages/{message_id}", delete(handlers::delete_message))
         // WebSocket
         .route("/ws/{room_key}", get(handlers::websocket_handler))
         // Static files

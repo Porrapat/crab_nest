@@ -242,4 +242,66 @@ impl Database {
 
         Ok(messages)
     }
+
+    /// Delete message within 1 minute window
+    /// Returns Ok(true) if deleted, Ok(false) if message not found
+    /// Returns Err with "message_delete_locked" if message is older than 1 minute
+    pub async fn delete_message(&self, message_id: i64, sender_name: &str) -> Result<bool, String> {
+        // First, check if the message exists and get its created_at time
+        let message: Option<(String, String)> = sqlx::query_as(
+            "SELECT sender_name, created_at FROM messages WHERE id = ?"
+        )
+        .bind(message_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+
+        match message {
+            None => Ok(false), // Message not found
+            Some((msg_sender, created_at)) => {
+                // Verify sender ownership
+                if msg_sender != sender_name {
+                    return Err("unauthorized".to_string());
+                }
+
+                // Check if message is within 1 minute delete window
+                // SQLite datetime format: "YYYY-MM-DD HH:MM:SS"
+                let created_time = chrono::NaiveDateTime::parse_from_str(&created_at, "%Y-%m-%d %H:%M:%S")
+                    .map_err(|e| format!("Failed to parse timestamp: {}", e))?;
+                
+                let now = chrono::Utc::now().naive_utc();
+                let elapsed = now.signed_duration_since(created_time);
+                
+                // 1 minute = 60 seconds
+                if elapsed.num_seconds() > 60 {
+                    return Err("message_delete_locked".to_string());
+                }
+
+                // Delete the message
+                let result = sqlx::query("DELETE FROM messages WHERE id = ?")
+                    .bind(message_id)
+                    .execute(&self.pool)
+                    .await
+                    .map_err(|e| format!("Failed to delete: {}", e))?;
+
+                Ok(result.rows_affected() > 0)
+            }
+        }
+    }
+
+    /// Get message by ID
+    pub async fn get_message_by_id(&self, message_id: i64) -> Result<Option<ChatMessage>, sqlx::Error> {
+        let message = sqlx::query_as::<_, ChatMessage>(
+            r#"SELECT id, room_id, sender_name, content, 
+                      COALESCE(message_type, 'text') as message_type, 
+                      voice_path,
+                      (replace(created_at, ' ', 'T') || 'Z') as created_at 
+               FROM messages WHERE id = ?"#
+        )
+        .bind(message_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(message)
+    }
 }

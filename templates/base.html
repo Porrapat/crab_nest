@@ -559,6 +559,57 @@
             display: none;
         }
         
+        /* Message footer with time and delete button */
+        .message-footer {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 4px;
+        }
+        
+        .message-own .message-footer {
+            justify-content: flex-end;
+        }
+        
+        /* Delete button and countdown */
+        .delete-container {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .delete-countdown {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            font-family: 'Courier New', monospace;
+            padding: 2px 6px;
+            background: rgba(239, 68, 68, 0.1);
+            border-radius: 4px;
+        }
+        
+        .btn-delete-message {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .btn-delete-message:hover {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        
+        .btn-delete-message:active {
+            transform: scale(0.95);
+        }
+        
         /* Scrollbar styling */
         ::-webkit-scrollbar {
             width: 8px;

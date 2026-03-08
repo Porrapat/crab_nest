@@ -461,3 +461,82 @@ pub async fn upload_voice(
         message_id: saved_msg.id,
     }))
 }
+
+/// Delete message request
+#[derive(Deserialize)]
+pub struct DeleteMessageRequest {
+    pub sender_name: String,
+}
+
+/// Delete message response
+#[derive(Serialize)]
+pub struct DeleteMessageResponse {
+    pub success: bool,
+    pub message: String,
+}
+
+/// API: Delete a message within 1 minute window
+pub async fn delete_message(
+    State(state): State<AppState>,
+    Path((room_key, message_id)): Path<(String, i64)>,
+    Json(payload): Json<DeleteMessageRequest>,
+) -> Result<Json<DeleteMessageResponse>, (StatusCode, Json<DeleteMessageResponse>)> {
+    // Verify room exists
+    let _room = state.db.get_room_by_key(&room_key).await
+        .map_err(|e| (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(DeleteMessageResponse {
+                success: false,
+                message: format!("Database error: {}", e),
+            })
+        ))?
+        .ok_or((
+            StatusCode::NOT_FOUND,
+            Json(DeleteMessageResponse {
+                success: false,
+                message: "Room not found".to_string(),
+            })
+        ))?;
+
+    // Attempt to delete the message
+    match state.db.delete_message(message_id, &payload.sender_name).await {
+        Ok(true) => {
+            // Broadcast message deletion to all clients in the room
+            let delete_msg = WsMessage::MessageDeleted { message_id };
+            if let Ok(json) = serde_json::to_string(&delete_msg) {
+                state.room_manager.broadcast(&room_key, &json).await;
+            }
+
+            Ok(Json(DeleteMessageResponse {
+                success: true,
+                message: "Message deleted successfully".to_string(),
+            }))
+        }
+        Ok(false) => {
+            Err((
+                StatusCode::NOT_FOUND,
+                Json(DeleteMessageResponse {
+                    success: false,
+                    message: "Message not found".to_string(),
+                })
+            ))
+        }
+        Err(e) => {
+            let status = if e == "message_delete_locked" {
+                StatusCode::FORBIDDEN
+            } else if e == "unauthorized" {
+                StatusCode::UNAUTHORIZED
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+
+            Err((
+                status,
+                Json(DeleteMessageResponse {
+                    success: false,
+                    message: e,
+                })
+            ))
+        }
+    }
+}
